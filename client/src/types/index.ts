@@ -15,6 +15,7 @@ export interface Story {
   premise: string
   stage: StoryStage
   setting: string | null   // Markdown 格式的故事设定
+  outline: string | null   // Markdown 格式的大纲全文
   genre?: string
   targetWordCount?: number
   currentWordCount: number

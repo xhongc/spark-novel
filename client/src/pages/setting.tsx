@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useStoryStore } from '@/stores/story-store'
-import { ArrowLeft, Loader2, RefreshCw, Sparkles, Pencil, Check, X, Eye } from 'lucide-react'
+import { ArrowLeft, Loader2, RefreshCw, Sparkles, Pencil, Check, X } from 'lucide-react'
 
 export default function SettingPage() {
   const { id } = useParams<{ id: string }>()
@@ -12,25 +12,25 @@ export default function SettingPage() {
   const [setting, setSetting] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [streamingText, setStreamingText] = useState('')
-  const [isEditing, setIsEditing] = useState(false)
   const [editDraft, setEditDraft] = useState('')
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
-  const scrollRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const resizeTextarea = useCallback(() => {
     const el = textareaRef.current
     if (!el) return
+    const savedScrollY = window.scrollY
     el.style.height = 'auto'
     el.style.height = el.scrollHeight + 'px'
+    requestAnimationFrame(() => {
+      window.scrollTo(0, savedScrollY)
+    })
   }, [])
 
   useEffect(() => {
-    if (isGenerating) {
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-    }
-  }, [streamingText, isGenerating])
+    resizeTextarea()
+  }, [editDraft, resizeTextarea])
 
   useEffect(() => {
     if (id) fetchStory(id)
@@ -39,6 +39,7 @@ export default function SettingPage() {
   useEffect(() => {
     if (currentStory?.setting) {
       setSetting(currentStory.setting)
+      setEditDraft(currentStory.setting)
     }
   }, [currentStory])
 
@@ -46,12 +47,12 @@ export default function SettingPage() {
     if (!id) return
     setIsGenerating(true)
     setStreamingText('')
-    setIsEditing(false)
     try {
       const result = await generateSetting(id, (chunk) => {
         setStreamingText(prev => prev + chunk)
       })
       setSetting(result)
+      setEditDraft(result)
     } catch {
       // 错误处理
     } finally {
@@ -60,20 +61,10 @@ export default function SettingPage() {
   }
 
   const handleConfirm = async () => {
-    if (!id || !setting) return
-    await updateSetting(id, setting)
-    navigate(`/stories/${encodeURIComponent(id)}/outline`)
-  }
-
-  const handleStartEdit = () => {
-    setEditDraft(setting || '')
-    setIsEditing(true)
-    requestAnimationFrame(resizeTextarea)
-  }
-
-  const handleSaveEdit = () => {
+    if (!id || !editDraft) return
     setSetting(editDraft)
-    setIsEditing(false)
+    await updateSetting(id, editDraft)
+    navigate(`/stories/${encodeURIComponent(id)}/outline`)
   }
 
   const handleStartEditTitle = () => {
@@ -139,7 +130,7 @@ export default function SettingPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-4 space-y-6 pb-28">
+      <main className="mx-auto max-w-2xl px-4 py-4 space-y-6 pb-28" style={{ overflowAnchor: 'none' }}>
         {/* 核心梗概 */}
         <section>
           <h2 className="text-sm font-semibold text-foreground/80 uppercase tracking-wide mb-1">核心梗概</h2>
@@ -153,7 +144,7 @@ export default function SettingPage() {
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>AI 正在生成设定...</span>
             </div>
-            <div ref={scrollRef} className="rounded-lg bg-muted/50 p-4 max-h-[60vh] overflow-y-auto">
+            <div className="rounded-lg bg-muted/50 p-4 max-h-[60vh] overflow-y-auto">
               <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground/80">
                 {streamingText || <span className="animate-pulse">等待响应...</span>}
               </pre>
@@ -171,45 +162,16 @@ export default function SettingPage() {
           </div>
         )}
 
-        {/* 设定内容展示/编辑 */}
+        {/* 设定内容 */}
         {setting && !isGenerating && (
           <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-foreground/80 uppercase tracking-wide">故事设定</h2>
-              {isEditing ? (
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
-                    <X className="h-3.5 w-3.5 mr-1" /> 取消
-                  </Button>
-                  <Button size="sm" onClick={handleSaveEdit}>
-                    <Check className="h-3.5 w-3.5 mr-1" /> 保存
-                  </Button>
-                </div>
-              ) : (
-                <Button variant="ghost" size="sm" onClick={handleStartEdit}>
-                  <Pencil className="h-3.5 w-3.5 mr-1" /> 编辑
-                </Button>
-              )}
-            </div>
-
-            {isEditing ? (
-              <textarea
-                ref={textareaRef}
-                value={editDraft}
-                onChange={e => { setEditDraft(e.target.value); resizeTextarea() }}
-                className="w-full rounded-lg bg-muted/30 p-5 font-serif text-sm leading-[1.8] text-foreground whitespace-pre-wrap resize-none overflow-hidden focus:outline-none"
-                autoFocus
-              />
-            ) : (
-              <article
-                className="rounded-lg bg-muted/30 p-5 cursor-text select-none"
-                onDoubleClick={handleStartEdit}
-              >
-                <div className="whitespace-pre-wrap font-serif text-sm leading-[1.8] text-foreground/90">
-                  {setting}
-                </div>
-              </article>
-            )}
+            <h2 className="text-sm font-semibold text-foreground/80 uppercase tracking-wide">故事设定</h2>
+            <textarea
+              ref={textareaRef}
+              value={editDraft}
+              onChange={e => setEditDraft(e.target.value)}
+              className="w-full rounded-lg bg-muted/30 p-5 font-serif text-sm leading-[1.8] text-foreground whitespace-pre-wrap resize-none overflow-hidden focus:outline-none"
+            />
           </section>
         )}
       </main>

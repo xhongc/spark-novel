@@ -8,6 +8,7 @@ function parseStory(raw: Record<string, unknown>): Story {
   return {
     ...raw,
     setting: (raw.setting as string) || null,
+    outline: (raw.outline as string) || null,
     sectionCount: (raw.sections as unknown[])?.length ?? (raw.sectionCount as number) ?? 0,
   } as Story
 }

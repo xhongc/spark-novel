@@ -159,6 +159,13 @@ export async function storyRoutes(fastify: FastifyInstance): Promise<void> {
 
     const sections = await scanOutlines(dir);
 
+    // 读取大纲全文
+    const outlinePath = path.join(dir, "大纲.md");
+    let outline: string | null = null;
+    try {
+      outline = await fs.readFile(outlinePath, "utf-8");
+    } catch { /* 无大纲文件 */ }
+
     // 读取正文内容
     const contentDir = path.join(dir, "正文");
     for (const section of sections) {
@@ -183,6 +190,7 @@ export async function storyRoutes(fastify: FastifyInstance): Promise<void> {
         targetWordCount: meta.targetWordCount || null,
         currentWordCount: meta.currentWordCount || 0,
         setting,
+        outline,
         sectionCount: sections.length,
         sections,
         createdAt: meta.createdAt,

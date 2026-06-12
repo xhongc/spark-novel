@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useStoryStore } from '@/stores/story-store'
-import { ArrowLeft, Loader2, RefreshCw, Edit3, Check, X } from 'lucide-react'
+import { ArrowLeft, Loader2, RefreshCw, Check, X } from 'lucide-react'
 
 export default function OutlinePage() {
   const { id } = useParams<{ id: string }>()
@@ -11,24 +11,29 @@ export default function OutlinePage() {
   const [outlineText, setOutlineText] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [streamingText, setStreamingText] = useState('')
-  const [isEditing, setIsEditing] = useState(false)
   const [editDraft, setEditDraft] = useState('')
   const [isConfirming, setIsConfirming] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const resizeTextarea = useCallback(() => {
     const el = textareaRef.current
     if (!el) return
+    const savedScrollY = window.scrollY
     el.style.height = 'auto'
     el.style.height = el.scrollHeight + 'px'
+    window.scrollTo(0, savedScrollY)
   }, [])
 
-  useEffect(() => {
-    if (isGenerating) {
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+  useLayoutEffect(() => {
+    resizeTextarea()
+  }, [editDraft, resizeTextarea])
+
+  // textarea 挂载后（outlineText 从 null 变为有值），同步调整高度
+  useLayoutEffect(() => {
+    if (outlineText !== null && !isGenerating) {
+      resizeTextarea()
     }
-  }, [streamingText, isGenerating])
+  }, [outlineText, isGenerating, resizeTextarea])
 
   useEffect(() => {
     if (id) fetchStory(id)
@@ -36,23 +41,37 @@ export default function OutlinePage() {
 
   // 从 sections 同步大纲文本（已确认的大纲，sections 存在）
   useEffect(() => {
-    if (sections.length > 0 && outlineText === null && !isGenerating) {
-      // 已有 sections，说明大纲已确认，从服务器读取大纲.md
-      // outlineText 保持 null，直接显示 sections
+    if (outlineText === null && !isGenerating) {
+      // 优先使用后端返回的大纲全文
+      if (currentStory?.outline) {
+        setOutlineText(currentStory.outline)
+        setEditDraft(currentStory.outline)
+      } else if (sections.length > 0) {
+        // 回退：从 sections 重建
+        const text = sections
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map((sec, i) => {
+            const wc = sec.targetWordCount ? `（${sec.targetWordCount}字）` : ''
+            return `### 第${i + 1}章 ${sec.title}${wc}\n\n${sec.summary || ''}`
+          })
+          .join('\n\n')
+        setOutlineText(text)
+        setEditDraft(text)
+      }
     }
-  }, [sections, outlineText, isGenerating])
+  }, [currentStory, sections, outlineText, isGenerating])
 
   const handleGenerate = async () => {
     if (!id) return
     setIsGenerating(true)
     setStreamingText('')
     setOutlineText(null)
-    setIsEditing(false)
     try {
       const result = await generateOutline(id, (chunk) => {
         setStreamingText(prev => prev + chunk)
       })
       setOutlineText(result)
+      setEditDraft(result)
     } catch {
       // 错误处理
     } finally {
@@ -60,22 +79,12 @@ export default function OutlinePage() {
     }
   }
 
-  const handleStartEdit = () => {
-    setEditDraft(outlineText || '')
-    setIsEditing(true)
-    requestAnimationFrame(resizeTextarea)
-  }
-
-  const handleSaveEdit = () => {
-    setOutlineText(editDraft)
-    setIsEditing(false)
-  }
-
   const handleConfirm = async () => {
-    if (!id || !outlineText) return
+    if (!id || !editDraft) return
+    setOutlineText(editDraft)
     setIsConfirming(true)
     try {
-      await confirmOutline(id, outlineText)
+      await confirmOutline(id, editDraft)
       navigate(`/stories/${encodeURIComponent(id)}/write`)
     } catch {
       // 错误处理
@@ -98,7 +107,7 @@ export default function OutlinePage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-6 space-y-6 pb-28">
+      <main className="mx-auto max-w-2xl px-4 py-6 space-y-6 pb-28" style={{ overflowAnchor: 'none' }}>
         {isLoading && !isGenerating ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -110,54 +119,24 @@ export default function OutlinePage() {
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>AI 正在构思故事结构...</span>
             </div>
-            <div ref={scrollRef} className="rounded-lg bg-muted/50 p-4 max-h-[70vh] overflow-y-auto">
+            <div className="rounded-lg bg-muted/50 p-4 max-h-[70vh] overflow-y-auto">
               <pre className="whitespace-pre-wrap break-words font-serif text-sm leading-[1.8] text-foreground/80">
                 {streamingText || <span className="animate-pulse">等待响应...</span>}
               </pre>
             </div>
           </section>
         ) : showOutlineContent ? (
-          /* 大纲内容（刚生成，待确认） */
+          /* 大纲内容 */
           <section className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                大纲已生成，共 {outlineText.split(/(?=### 第\d+章)/).filter(s => s.trim()).length} 个章节
-              </p>
-              {isEditing ? (
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
-                    <X className="h-3.5 w-3.5 mr-1" /> 取消
-                  </Button>
-                  <Button size="sm" onClick={handleSaveEdit}>
-                    <Check className="h-3.5 w-3.5 mr-1" /> 保存
-                  </Button>
-                </div>
-              ) : (
-                <Button variant="ghost" size="sm" onClick={handleStartEdit}>
-                  <Edit3 className="h-3.5 w-3.5 mr-1" /> 编辑
-                </Button>
-              )}
-            </div>
-
-            {isEditing ? (
-              <textarea
-                ref={textareaRef}
-                value={editDraft}
-                onChange={e => { setEditDraft(e.target.value); resizeTextarea() }}
-                className="w-full rounded-lg bg-muted/30 p-5 font-serif text-sm leading-[1.8] text-foreground whitespace-pre-wrap resize-none overflow-hidden focus:outline-none"
-                autoFocus
-              />
-            ) : (
-              <div
-                className="rounded-lg bg-muted/30 p-5 cursor-text select-none"
-                onDoubleClick={handleStartEdit}
-              >
-                <div className="whitespace-pre-wrap font-serif text-sm leading-[1.8] text-foreground/90">
-                  {outlineText}
-                </div>
-              </div>
-            )}
-
+            <p className="text-sm text-muted-foreground">
+              大纲已生成，共 {editDraft.split(/(?=### 第\d+章)/).filter(s => s.trim()).length} 个章节
+            </p>
+            <textarea
+              ref={textareaRef}
+              value={editDraft}
+              onChange={e => setEditDraft(e.target.value)}
+              className="w-full rounded-lg bg-muted/30 p-5 font-serif text-sm leading-[1.8] text-foreground whitespace-pre-wrap resize-none overflow-hidden focus:outline-none"
+            />
             <div className="flex gap-3 pt-2">
               <Button variant="outline" className="flex-1" onClick={handleGenerate}>
                 <RefreshCw className="h-4 w-4 mr-2" /> 重新生成
