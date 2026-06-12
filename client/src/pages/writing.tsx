@@ -88,7 +88,7 @@ export default function WritingPage() {
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
       {/* 顶部栏 */}
-      <header className="shrink-0 h-12 border-b bg-background/90 backdrop-blur-sm z-20">
+      <header className="shrink-0 h-12 shadow-sm bg-background/90 backdrop-blur-sm z-20">
         <div className="flex h-full items-center justify-between px-4">
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate('/stories')}>
             <ArrowLeft className="h-4 w-4" />
@@ -184,7 +184,7 @@ export default function WritingPage() {
               <button
                 type="button"
                 onClick={() => goToSection(currentSectionIndex - 1)}
-                className="absolute left-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-background/80 border shadow-sm hover:bg-muted transition-colors"
+                className="absolute left-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-background/80 shadow-md hover:bg-muted transition-colors"
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
@@ -193,7 +193,7 @@ export default function WritingPage() {
               <button
                 type="button"
                 onClick={() => goToSection(currentSectionIndex + 1)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-background/80 border shadow-sm hover:bg-muted transition-colors"
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-background/80 shadow-md hover:bg-muted transition-colors"
               >
                 <ChevronRight className="h-5 w-5" />
               </button>
@@ -203,7 +203,7 @@ export default function WritingPage() {
       </div>
 
       {/* 底部栏 */}
-      <footer className="shrink-0 border-t bg-background/90 backdrop-blur-sm z-20">
+      <footer className="shrink-0 shadow-[0_-1px_3px_rgba(0,0,0,0.05)] bg-background/90 backdrop-blur-sm z-20">
         <div className="flex items-center justify-between px-4 h-14">
           {/* 左侧导航 */}
           <div className="flex items-center gap-2 text-sm">
@@ -258,18 +258,18 @@ export default function WritingPage() {
         <button
           type="button"
           onClick={() => openChat('half')}
-          className="fixed bottom-20 right-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-white/70 backdrop-blur-lg text-foreground shadow-lg border border-black/5 hover:bg-white/90 transition-colors"
+          className="fixed bottom-20 right-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-white/70 backdrop-blur-lg text-foreground shadow-lg hover:bg-white/90 transition-colors"
         >
           <MessageCircle className="h-5 w-5" />
         </button>
       ) : (
-        <div className={`fixed z-30 bg-background border shadow-xl transition-all rounded-t-xl ${
+        <div className={`fixed z-30 bg-background shadow-2xl transition-all rounded-t-xl ${
           chatMode === 'fullscreen'
             ? 'inset-0'
             : 'bottom-0 left-0 right-0 h-[40vh]'
         }`}>
           {/* 对话框头部 */}
-          <div className="flex items-center justify-between border-b px-4 h-10">
+          <div className="flex items-center justify-between shadow-sm px-4 h-10">
             <span className="text-sm font-medium">AI 写作助手</span>
             <div className="flex items-center gap-1">
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openChat(chatMode === 'fullscreen' ? 'half' : 'fullscreen')}>
@@ -294,18 +294,18 @@ export default function WritingPage() {
                     {msg.type === 'diff' && msg.diffData ? (
                       <div className="space-y-2">
                         <p>{msg.content}</p>
-                        <div className="rounded-lg border overflow-hidden text-xs">
+                        <div className="rounded-lg shadow-sm overflow-hidden text-xs">
                           <div className="bg-red-50 px-3 py-2 line-through text-red-600">
                             {msg.diffData.original}
                           </div>
                           <div className="bg-emerald-50 px-3 py-2 text-emerald-700">
                             {msg.diffData.modified}
                           </div>
-                          <div className="flex border-t">
+                          <div className="flex shadow-[inset_0_1px_0_rgba(0,0,0,0.06)]">
                             <button type="button" className="flex-1 px-3 py-2 hover:bg-muted transition-colors text-center font-medium">
                               接受
                             </button>
-                            <button type="button" className="flex-1 px-3 py-2 hover:bg-muted transition-colors text-center border-l">
+                            <button type="button" className="flex-1 px-3 py-2 hover:bg-muted transition-colors text-center shadow-[inset_1px_0_0_rgba(0,0,0,0.06)]">
                               拒绝
                             </button>
                           </div>
@@ -322,7 +322,7 @@ export default function WritingPage() {
           </div>
 
           {/* 快捷按钮 + 输入框 */}
-          <div className="absolute bottom-0 left-0 right-0 border-t bg-background">
+          <div className="absolute bottom-0 left-0 right-0 shadow-[0_-1px_3px_rgba(0,0,0,0.05)] bg-background">
             <div className="flex gap-2 px-4 py-2 overflow-x-auto">
               {[
                 { icon: <PenTool className="h-3 w-3" />, label: '扩写' },
@@ -335,7 +335,7 @@ export default function WritingPage() {
                   key={btn.label}
                   type="button"
                   onClick={() => setChatInput(btn.label + '：')}
-                  className="flex items-center gap-1 shrink-0 rounded-full border px-3 py-1 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+                  className="flex items-center gap-1 shrink-0 rounded-full shadow-sm px-3 py-1 text-xs text-muted-foreground hover:text-foreground hover:shadow-md transition-colors"
                 >
                   {btn.icon} {btn.label}
                 </button>
@@ -361,8 +361,8 @@ export default function WritingPage() {
       {isDrawerOpen && (
         <>
           <div className="fixed inset-0 z-40 bg-black/30" onClick={toggleDrawer} />
-          <div className="fixed top-0 left-0 bottom-0 z-50 w-72 bg-background border-r shadow-xl flex flex-col">
-            <div className="flex items-center justify-between px-4 h-12 border-b">
+          <div className="fixed top-0 left-0 bottom-0 z-50 w-72 bg-background shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-4 h-12 shadow-sm">
               <span className="text-sm font-medium">小节列表</span>
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={toggleDrawer}>
                 <X className="h-4 w-4" />
@@ -396,7 +396,7 @@ export default function WritingPage() {
                 )
               })}
             </div>
-            <div className="border-t p-3 space-y-2">
+            <div className="shadow-[inset_0_1px_0_rgba(0,0,0,0.05)] p-3 space-y-2">
               <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => { toggleDrawer(); navigate(`/stories/${id}/setting`) }}>
                 <FileText className="h-4 w-4 mr-2" /> 回顾故事设定
               </Button>

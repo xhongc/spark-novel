@@ -73,8 +73,8 @@ export default function StoryListPage() {
         ) : (
           <div className="space-y-3">
             {stories.map(story => (
-              <Link key={story.id} to={getStageRoute(story.id, story.stage)}>
-                <Card className="transition-shadow hover:shadow-md cursor-pointer">
+              <Link key={story.id} to={getStageRoute(story.id, story.stage)} className="block">
+                <Card className="transition-shadow hover:shadow-md cursor-pointer shadow-sm">
                   <CardContent className="flex items-center justify-between p-4">
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
