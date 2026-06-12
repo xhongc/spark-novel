@@ -25,6 +25,7 @@ interface WritingState {
   openChat: (mode?: ChatMode) => void
   closeChat: () => void
   toggleDrawer: () => void
+  setChatMessages: (messages: ChatMessage[]) => void
   setChatStatusText: (status: string | null) => void
   clearChatMessages: () => void
   stopChatMessage: () => void
@@ -56,6 +57,8 @@ export const useWritingStore = create<WritingState>((set, get) => ({
   closeChat: () => set({ chatMode: 'collapsed' }),
 
   toggleDrawer: () => set(state => ({ isDrawerOpen: !state.isDrawerOpen })),
+
+  setChatMessages: (messages) => set({ chatMessages: messages }),
 
   setChatStatusText: (status) => set({ chatStatusText: status }),
 

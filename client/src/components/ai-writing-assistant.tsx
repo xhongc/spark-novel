@@ -6,7 +6,7 @@ import { api } from '@/lib/api-client'
 import { useMaterialsStore } from '@/stores/materials-store'
 import { useStoryStore } from '@/stores/story-store'
 import { useWritingStore } from '@/stores/writing-store'
-import type { ChatReference, Material, Skill } from '@/types'
+import type { ChatMessage, ChatReference, Material, Skill } from '@/types'
 import {
   AtSign,
   FileText,
@@ -101,6 +101,8 @@ export default function AIWritingAssistant() {
   const inputRef = useRef<HTMLInputElement>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const isComposingRef = useRef(false)
+  const isHistoryLoadingRef = useRef(false)
+  const hasLoadedHistoryRef = useRef(false)
 
   const { currentStory, sections } = useStoryStore()
   const { currentMaterial } = useMaterialsStore()
@@ -113,6 +115,7 @@ export default function AIWritingAssistant() {
     chatStatusText,
     openChat,
     closeChat,
+    setChatMessages,
     setChatStatusText,
     clearChatMessages,
     sendMessage,
@@ -163,6 +166,42 @@ export default function AIWritingAssistant() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages, visibleStatusText])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadChatHistory() {
+      if (hasLoadedHistoryRef.current || isHistoryLoadingRef.current) return
+      if (useWritingStore.getState().chatMessages.length > 0) {
+        hasLoadedHistoryRef.current = true
+        return
+      }
+
+      isHistoryLoadingRef.current = true
+
+      try {
+        const { data } = await api.get('/assistant/chat/session')
+        if (cancelled) return
+        if (useWritingStore.getState().chatMessages.length > 0) {
+          hasLoadedHistoryRef.current = true
+          return
+        }
+
+        setChatMessages((data.data?.messages as ChatMessage[] | undefined) ?? [])
+        hasLoadedHistoryRef.current = true
+      } catch {
+        return
+      } finally {
+        isHistoryLoadingRef.current = false
+      }
+    }
+
+    void loadChatHistory()
+
+    return () => {
+      cancelled = true
+    }
+  }, [chatMode, setChatMessages])
 
   const lookup = useMemo(() => {
     const nextLookup = getLookupState(chatInput, caretPosition)

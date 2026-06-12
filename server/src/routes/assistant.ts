@@ -45,14 +45,26 @@ function buildPrompt(input: z.infer<typeof assistantChatSchema>): string {
     formatReferencedDocuments("已调用技能", input.referencedSkills),
   ].filter(Boolean);
 
-  return `${contextBlocks.length > 0 ? `当前上下文：\n${contextBlocks.join("\n\n")}\n\n` : ""}用户本轮请求：
-${input.content}
+  if (contextBlocks.length === 0) {
+    return "";
+  }
 
-请结合已有会话历史与本轮上下文继续回复。`;
+  return `当前上下文：
+${contextBlocks.join("\n\n")}
+
+请在回复下一条用户消息时参考以上上下文。`;
 }
 
 export async function assistantRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook("onRequest", authGuard);
+
+  fastify.get("/assistant/chat/session", async (req, reply) => {
+    const messages = await piAgent.getChatHistory(req.user.userId);
+    return reply.send({
+      success: true,
+      data: { messages },
+    });
+  });
 
   fastify.delete("/assistant/chat/session", async (req, reply) => {
     piAgent.resetChatSession(req.user.userId);
@@ -67,13 +79,15 @@ export async function assistantRoutes(fastify: FastifyInstance): Promise<void> {
     const prompt = buildPrompt(payload);
 
     req.log.info({ payload }, "[assistant] chat payload");
-    req.log.info(`\n[assistant] prompt begin\n${prompt}\n[assistant] prompt end`);
+    if (prompt) {
+      req.log.info(`\n[assistant] context begin\n${prompt}\n[assistant] context end`);
+    }
 
     initSSE(reply);
     sendSSE(reply, "progress", { type: "start" });
 
     try {
-      for await (const chunk of piAgent.streamChat(req.user.userId, prompt)) {
+      for await (const chunk of piAgent.streamChat(req.user.userId, payload.content, prompt || null)) {
         sendSSE(reply, "chunk", { type: "content", text: chunk });
       }
 
