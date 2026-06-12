@@ -42,6 +42,10 @@ interface OutlineEntry {
   wordCount?: number;
 }
 
+function normalizeSectionStatus(status: string | undefined): string {
+  return !status || status === "locked" ? "review" : status;
+}
+
 async function scanOutlines(dir: string): Promise<OutlineEntry[]> {
   const outlineDir = path.join(dir, "小节大纲");
   try {
@@ -62,7 +66,7 @@ async function scanOutlines(dir: string): Promise<OutlineEntry[]> {
           title: data.title || parsed.title,
           summary: data.summary || "",
           targetWordCount: data.targetWordCount || 1500,
-          status: data.status || "locked",
+          status: normalizeSectionStatus(data.status),
         });
       } catch {
         // 跳过解析失败的文件

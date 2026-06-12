@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import type { ChatMessage } from '@/types'
-import { mockChatMessages } from '@/mocks/data'
+import { streamGenerate } from '@/lib/sse-client'
+import type { ChatContext, ChatMessage } from '@/types'
 
 type ChatMode = 'collapsed' | 'half' | 'fullscreen'
 
@@ -11,6 +11,7 @@ interface WritingState {
   chatMode: ChatMode
   isDrawerOpen: boolean
   chatMessages: ChatMessage[]
+  isChatSending: boolean
   isGenerating: boolean
   generatingSectionId: string | null
 
@@ -20,7 +21,7 @@ interface WritingState {
   openChat: (mode?: ChatMode) => void
   closeChat: () => void
   toggleDrawer: () => void
-  sendMessage: (content: string) => Promise<void>
+  sendMessage: (content: string, context?: ChatContext) => Promise<void>
   startGeneration: (sectionId: string) => void
   stopGeneration: () => void
 }
@@ -31,7 +32,8 @@ export const useWritingStore = create<WritingState>((set, get) => ({
   selectedText: '',
   chatMode: 'collapsed',
   isDrawerOpen: false,
-  chatMessages: mockChatMessages,
+  chatMessages: [],
+  isChatSending: false,
   isGenerating: false,
   generatingSectionId: null,
 
@@ -47,26 +49,80 @@ export const useWritingStore = create<WritingState>((set, get) => ({
 
   toggleDrawer: () => set(state => ({ isDrawerOpen: !state.isDrawerOpen })),
 
-  sendMessage: async (content) => {
+  sendMessage: async (content, context) => {
+    const timestamp = Date.now()
     const userMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
+      id: `msg-user-${timestamp}`,
       role: 'user',
       content,
       createdAt: new Date().toISOString(),
       type: 'text',
     }
-    set(state => ({ chatMessages: [...state.chatMessages, userMsg] }))
-
-    await new Promise(r => setTimeout(r, 800))
-
     const assistantMsg: ChatMessage = {
-      id: `msg-${Date.now() + 1}`,
+      id: `msg-assistant-${timestamp}`,
       role: 'assistant',
-      content: `好的，我来处理你的请求："${content.slice(0, 30)}..."`,
+      content: '',
       createdAt: new Date().toISOString(),
       type: 'text',
     }
-    set(state => ({ chatMessages: [...state.chatMessages, assistantMsg] }))
+    const history = [...get().chatMessages, userMsg]
+
+    set(state => ({
+      chatMessages: [...state.chatMessages, userMsg, assistantMsg],
+      isChatSending: true,
+    }))
+
+    let hasResponse = false
+
+    try {
+      await streamGenerate('/api/v1/assistant/chat', {
+        messages: history.map(({ role, content: messageContent }) => ({
+          role,
+          content: messageContent,
+        })),
+        ...context,
+      }, {
+        onChunk: (text) => {
+          hasResponse = true
+          set(state => ({
+            chatMessages: state.chatMessages.map(message => (
+              message.id === assistantMsg.id
+                ? { ...message, content: message.content + text }
+                : message
+            )),
+          }))
+        },
+        onError: (message) => {
+          set(state => ({
+            chatMessages: state.chatMessages.map(chatMessage => (
+              chatMessage.id === assistantMsg.id
+                ? { ...chatMessage, content: message || 'AI 回复失败，请稍后重试。' }
+                : chatMessage
+            )),
+            isChatSending: false,
+          }))
+        },
+        onDone: () => {
+          set(state => ({
+            chatMessages: state.chatMessages.map(chatMessage => (
+              chatMessage.id === assistantMsg.id && !hasResponse
+                ? { ...chatMessage, content: 'AI 暂时没有返回内容，请重试。' }
+                : chatMessage
+            )),
+            isChatSending: false,
+          }))
+        },
+      })
+    } catch {
+      set(state => ({
+        chatMessages: state.chatMessages.map(chatMessage => (
+          chatMessage.id === assistantMsg.id
+            ? { ...chatMessage, content: 'AI 回复失败，请稍后重试。' }
+            : chatMessage
+        )),
+        isChatSending: false,
+      }))
+    }
   },
 
   startGeneration: (sectionId) => set({ isGenerating: true, generatingSectionId: sectionId }),

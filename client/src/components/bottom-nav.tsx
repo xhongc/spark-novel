@@ -1,8 +1,9 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import { BookOpen, FolderOpen, Settings } from 'lucide-react'
+import { BookOpen, FolderOpen, Zap, Settings } from 'lucide-react'
 
 const tabs = [
   { path: '/materials', label: '素材', icon: FolderOpen },
+  { path: '/skills', label: '技能', icon: Zap },
   { path: '/stories', label: '故事', icon: BookOpen },
   { path: '/settings', label: '设置', icon: Settings },
 ]

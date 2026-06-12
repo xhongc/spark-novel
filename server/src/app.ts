@@ -5,6 +5,8 @@ import { authRoutes } from "./routes/auth.js";
 import { storyRoutes } from "./routes/stories.js";
 import { generateRoutes } from "./routes/generate.js";
 import { materialsRoutes } from "./routes/materials.js";
+import { skillRoutes } from "./routes/skills.js";
+import { assistantRoutes } from "./routes/assistant.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -23,6 +25,8 @@ export async function buildApp() {
   await app.register(storyRoutes, { prefix: "/api/v1" });
   await app.register(generateRoutes, { prefix: "/api/v1" });
   await app.register(materialsRoutes, { prefix: "/api/v1" });
+  await app.register(skillRoutes, { prefix: "/api/v1" });
+  await app.register(assistantRoutes, { prefix: "/api/v1" });
 
   // 健康检查
   app.get("/health", async () => ({ status: "ok" }));

@@ -9,13 +9,16 @@ export default function SettingPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { currentStory, fetchStory, updateSetting, generateSetting, renameStory, isLoading } = useStoryStore()
-  const [setting, setSetting] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [streamingText, setStreamingText] = useState('')
-  const [editDraft, setEditDraft] = useState('')
+  const [draftState, setDraftState] = useState<{ storyId: string; value: string } | null>(null)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const storyKey = currentStory?.id || id || ''
+  const persistedSetting = currentStory?.setting || ''
+  const editDraft = draftState?.storyId === storyKey ? draftState.value : persistedSetting
+  const hasSetting = editDraft.trim().length > 0
 
   const resizeTextarea = useCallback(() => {
     const el = textareaRef.current
@@ -36,23 +39,15 @@ export default function SettingPage() {
     if (id) fetchStory(id)
   }, [id, fetchStory])
 
-  useEffect(() => {
-    if (currentStory?.setting) {
-      setSetting(currentStory.setting)
-      setEditDraft(currentStory.setting)
-    }
-  }, [currentStory])
-
   const handleGenerate = async () => {
-    if (!id) return
+    if (!storyKey) return
     setIsGenerating(true)
     setStreamingText('')
     try {
-      const result = await generateSetting(id, (chunk) => {
+      const result = await generateSetting(storyKey, (chunk) => {
         setStreamingText(prev => prev + chunk)
       })
-      setSetting(result)
-      setEditDraft(result)
+      setDraftState({ storyId: storyKey, value: result })
     } catch {
       // 错误处理
     } finally {
@@ -61,10 +56,9 @@ export default function SettingPage() {
   }
 
   const handleConfirm = async () => {
-    if (!id || !editDraft) return
-    setSetting(editDraft)
-    await updateSetting(id, editDraft)
-    navigate(`/stories/${encodeURIComponent(id)}/outline`)
+    if (!storyKey || !editDraft) return
+    await updateSetting(storyKey, editDraft)
+    navigate(`/stories/${encodeURIComponent(storyKey)}/outline`)
   }
 
   const handleStartEditTitle = () => {
@@ -86,7 +80,7 @@ export default function SettingPage() {
     setIsEditingTitle(false)
   }
 
-  if (isLoading && !setting) {
+  if (isLoading && !hasSetting) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -121,10 +115,10 @@ export default function SettingPage() {
             <button
               type="button"
               onClick={handleStartEditTitle}
-              className="flex items-center gap-2 group"
+              className="flex flex-1 items-center gap-2 group min-w-0"
             >
-              <h1 className="text-lg font-semibold">{currentStory?.title || '确认设定'}</h1>
-              <Pencil className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+              <h1 className="text-lg font-semibold truncate">{currentStory?.title || '确认设定'}</h1>
+              <Pencil className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
             </button>
           )}
         </div>
@@ -153,7 +147,7 @@ export default function SettingPage() {
         )}
 
         {/* 无设定且未生成：引导按钮 */}
-        {!setting && !isGenerating && (
+        {!hasSetting && !isGenerating && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <p className="text-muted-foreground mb-6">AI 将根据你的故事梗概生成完整设定</p>
             <Button size="lg" onClick={handleGenerate}>
@@ -163,13 +157,13 @@ export default function SettingPage() {
         )}
 
         {/* 设定内容 */}
-        {setting && !isGenerating && (
+        {hasSetting && !isGenerating && (
           <section className="space-y-3">
             <h2 className="text-sm font-semibold text-foreground/80 uppercase tracking-wide">故事设定</h2>
             <textarea
               ref={textareaRef}
               value={editDraft}
-              onChange={e => setEditDraft(e.target.value)}
+              onChange={e => setDraftState({ storyId: storyKey, value: e.target.value })}
               className="w-full rounded-lg bg-muted/30 p-5 font-serif text-sm leading-[1.8] text-foreground whitespace-pre-wrap resize-none overflow-hidden focus:outline-none"
             />
           </section>
@@ -177,7 +171,7 @@ export default function SettingPage() {
       </main>
 
       {/* 底部操作栏 */}
-      {setting && !isGenerating && (
+      {hasSetting && !isGenerating && (
         <div className="fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur-sm p-4 z-10">
           <div className="mx-auto max-w-2xl flex gap-3">
             <Button variant="outline" className="flex-1" onClick={handleGenerate}>

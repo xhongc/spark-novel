@@ -25,6 +25,91 @@ async function writeMeta(dir: string, data: Record<string, unknown>): Promise<vo
   await fs.writeFile(path.join(dir, "meta.md"), JSON.stringify(data, null, 2), "utf-8");
 }
 
+interface ParsedOutlineSection {
+  title: string;
+  summary: string;
+  targetWordCount: number;
+}
+
+const chapterHeadingRegex = /^(#{2,6})\s*(?:第\s*([0-9零一二三四五六七八九十百千两]+)\s*(章|节|幕|回|篇|卷)|(?:chapter|chap\.?)\s*(\d+)|(\d+)[.、])\s*[:：\-、.]?\s*(.*)$/i;
+const wordCountLineRegex = /^\s*>?\s*(?:预估|预计|目标)?\s*(?:总)?字数\s*[:：]?\s*(?:约\s*)?(\d+)\s*(?:字|words?)?\s*$/i;
+const inlineWordCountRegex = /(\d+)\s*(?:字|words?)/i;
+
+function sanitizeSectionTitle(title: string, fallbackIndex: number): string {
+  const cleaned = title
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[. ]+$/g, "");
+  return cleaned || `第${fallbackIndex}章`;
+}
+
+function isChapterHeading(line: string): boolean {
+  return chapterHeadingRegex.test(line.trim());
+}
+
+function parseOutlineSections(text: string): ParsedOutlineSection[] {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const headingIndexes: number[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    if (isChapterHeading(lines[i])) {
+      headingIndexes.push(i);
+    }
+  }
+
+  if (headingIndexes.length === 0) {
+    const summary = text.trim();
+    if (!summary) return [];
+    return [{
+      title: "第1章",
+      summary,
+      targetWordCount: 1500,
+    }];
+  }
+
+  const sections: ParsedOutlineSection[] = [];
+
+  for (let i = 0; i < headingIndexes.length; i++) {
+    const start = headingIndexes[i];
+    const end = headingIndexes[i + 1] ?? lines.length;
+    const [headingLine, ...bodyLines] = lines.slice(start, end);
+    const headingMatch = headingLine.trim().match(chapterHeadingRegex);
+    const rawTitle = headingMatch?.[6]?.trim() || `第${i + 1}章`;
+
+    let targetWordCount = 1500;
+    const summaryLines: string[] = [];
+
+    for (const line of bodyLines) {
+      const trimmed = line.trim();
+      const wordCountLineMatch = trimmed.match(wordCountLineRegex);
+      if (wordCountLineMatch) {
+        targetWordCount = parseInt(wordCountLineMatch[1], 10);
+        continue;
+      }
+
+      if (/字数|word count|words?/i.test(trimmed)) {
+        const inlineWordCountMatch = trimmed.match(inlineWordCountRegex);
+        if (inlineWordCountMatch) {
+          targetWordCount = parseInt(inlineWordCountMatch[1], 10);
+          continue;
+        }
+      }
+
+      summaryLines.push(line);
+    }
+
+    const summary = summaryLines.join("\n").trim();
+    sections.push({
+      title: sanitizeSectionTitle(rawTitle, i + 1),
+      summary,
+      targetWordCount,
+    });
+  }
+
+  return sections;
+}
+
 const generateSettingSchema = z.object({
   storyId: z.string(),
 });
@@ -186,8 +271,14 @@ ${settingContent}
     // 保存确认后的大纲
     await fs.writeFile(path.join(dir, "大纲.md"), text, "utf-8");
 
-    // 按 ### 第N章 分割
-    const sections = text.split(/(?=### 第\d+章)/).filter(s => s.trim());
+    const sections = parseOutlineSections(text);
+
+    if (sections.length === 0) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: "BAD_REQUEST", message: "大纲内容为空，无法拆分章节" },
+      });
+    }
 
     // 清空并重建小节大纲目录
     const outlineDir = path.join(dir, "小节大纲");
@@ -196,20 +287,14 @@ ${settingContent}
 
     for (let i = 0; i < sections.length; i++) {
       const sec = sections[i];
-      // 提取标题
-      const titleMatch = sec.match(/### 第\d+章[：:]\s*(.+)/);
-      const title = titleMatch ? titleMatch[1].trim() : `第${i + 1}章`;
-      // 提取摘要（标题之后、> 之前的文本）
-      const bodyStart = sec.indexOf("\n");
-      const body = bodyStart >= 0 ? sec.slice(bodyStart + 1) : "";
-      const summary = body.replace(/>.*/g, "").trim();
-      // 提取目标字数
-      const wcMatch = sec.match(/(\d+)\s*(?:字|words)/i);
-      const targetWordCount = wcMatch ? parseInt(wcMatch[1], 10) : 1500;
-
       const num = String(i + 1).padStart(2, "0");
-      const fileName = `${num}-${title}.md`;
-      const fileData = { title, summary, targetWordCount, status: i === 0 ? "review" : "locked" };
+      const fileName = `${num}-${sec.title}.md`;
+      const fileData = {
+        title: sec.title,
+        summary: sec.summary,
+        targetWordCount: sec.targetWordCount,
+        status: "review",
+      };
       await fs.writeFile(path.join(outlineDir, fileName), JSON.stringify(fileData, null, 2), "utf-8");
     }
 

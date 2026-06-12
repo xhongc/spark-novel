@@ -2,36 +2,36 @@ import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { useMaterialsStore } from '@/stores/materials-store'
+import { useSkillsStore } from '@/stores/skills-store'
 import BottomNav from '@/components/bottom-nav'
 import {
-  ArrowLeft, ChevronRight, Folder, FileText, Loader2,
+  ArrowLeft, ChevronRight, Zap, Folder, FileText, Loader2,
   MoreVertical, Trash2, Edit3, FolderPlus, FilePlus, X, Check,
 } from 'lucide-react'
 
-export default function MaterialsPage() {
+export default function SkillsPage() {
   const {
-    materials, isLoading, currentMaterial,
-    fetchMaterials, createFolder, createFile,
-    openMaterial, closeMaterial, updateContent,
-    renameMaterial, deleteMaterial,
-  } = useMaterialsStore()
+    skills, isLoading, currentSkill,
+    fetchSkills, createFolder, createFile,
+    openSkill, closeSkill, updateContent,
+    renameSkill, deleteSkill,
+  } = useSkillsStore()
 
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
-  const [breadcrumbs, setBreadcrumbs] = useState<Array<{ id: string | null; name: string }>>([{ id: null, name: '素材库' }])
+  const [breadcrumbs, setBreadcrumbs] = useState<Array<{ id: string | null; name: string }>>([{ id: null, name: '技能库' }])
   const [newItemName, setNewItemName] = useState('')
   const [newItemType, setNewItemType] = useState<'folder' | 'file' | null>(null)
   const [contextMenuId, setContextMenuId] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
-  const [editDraft, setEditDraft] = useState<{ materialId: string; content: string } | null>(null)
+  const [editDraft, setEditDraft] = useState<{ skillId: string; content: string } | null>(null)
   const [saved, setSaved] = useState(false)
   const newItemRef = useRef<HTMLInputElement>(null)
   const renameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    fetchMaterials()
-  }, [fetchMaterials])
+    fetchSkills()
+  }, [fetchSkills])
 
   useEffect(() => {
     if (newItemType && newItemRef.current) newItemRef.current.focus()
@@ -41,7 +41,7 @@ export default function MaterialsPage() {
     if (renamingId && renameRef.current) renameRef.current.focus()
   }, [renamingId])
 
-  const currentItems = materials.filter(m => m.parentId === currentFolderId)
+  const currentItems = skills.filter(m => m.parentId === currentFolderId)
   const folders = currentItems.filter(m => m.type === 'folder')
   const files = currentItems.filter(m => m.type === 'file')
 
@@ -49,7 +49,7 @@ export default function MaterialsPage() {
     setCurrentFolderId(id)
     setBreadcrumbs(prev => [...prev, { id, name }])
     setContextMenuId(null)
-    fetchMaterials(id) // 拉取子目录内容
+    fetchSkills(id)
   }
 
   const goToBreadcrumb = (index: number) => {
@@ -57,7 +57,7 @@ export default function MaterialsPage() {
     setCurrentFolderId(target.id)
     setBreadcrumbs(prev => prev.slice(0, index + 1))
     setContextMenuId(null)
-    fetchMaterials(target.id || '') // 拉取目标目录内容
+    fetchSkills(target.id || '')
   }
 
   const handleCreate = () => {
@@ -79,41 +79,41 @@ export default function MaterialsPage() {
 
   const handleConfirmRename = () => {
     if (renamingId && renameValue.trim()) {
-      renameMaterial(renamingId, renameValue.trim())
+      renameSkill(renamingId, renameValue.trim())
     }
     setRenamingId(null)
   }
 
   const handleDelete = (id: string) => {
-    deleteMaterial(id)
+    deleteSkill(id)
     setContextMenuId(null)
   }
 
   const handleSaveContent = async () => {
-    if (currentMaterial) {
-      await updateContent(currentMaterial.id, currentEditContent)
+    if (currentSkill) {
+      await updateContent(currentSkill.id, currentEditContent)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     }
   }
 
-  const currentEditContent = currentMaterial?.type === 'file'
-    ? editDraft?.materialId === currentMaterial.id
+  const currentEditContent = currentSkill?.type === 'file'
+    ? editDraft?.skillId === currentSkill.id
       ? editDraft.content
-      : currentMaterial.content || ''
+      : currentSkill.content || ''
     : ''
 
   // 文件编辑视图
-  if (currentMaterial && currentMaterial.type === 'file') {
+  if (currentSkill && currentSkill.type === 'file') {
     return (
       <div className="h-screen bg-background flex flex-col pb-14">
         <header className="shrink-0 z-10 bg-background/80 backdrop-blur-sm shadow-sm">
           <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-4">
             <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" onClick={() => { closeMaterial(); setEditDraft(null) }}>
+              <Button variant="ghost" size="icon" onClick={() => { closeSkill(); setEditDraft(null) }}>
                 <ArrowLeft className="h-5 w-5" />
               </Button>
-              <h1 className="text-base font-medium truncate max-w-[200px]">{currentMaterial.name}</h1>
+              <h1 className="text-base font-medium truncate max-w-[200px]">{currentSkill.name}</h1>
             </div>
             <div className="flex items-center gap-2">
               {saved && <span className="text-sm text-emerald-600">已保存</span>}
@@ -126,7 +126,7 @@ export default function MaterialsPage() {
         <main className="flex-1 mx-auto w-full max-w-2xl px-4 py-4 overflow-hidden">
           <Textarea
             value={currentEditContent}
-            onChange={e => setEditDraft({ materialId: currentMaterial.id, content: e.target.value })}
+            onChange={e => setEditDraft({ skillId: currentSkill.id, content: e.target.value })}
             className="h-full resize-none font-serif text-base leading-[1.8] border-0 bg-muted/50 focus-visible:ring-0 p-4"
             placeholder="开始写点什么..."
           />
@@ -141,7 +141,7 @@ export default function MaterialsPage() {
     <div className="min-h-screen bg-background pb-14">
       <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm">
         <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-4">
-          <h1 className="text-lg font-semibold">我的素材</h1>
+          <h1 className="text-lg font-semibold">我的技能</h1>
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"
@@ -200,8 +200,8 @@ export default function MaterialsPage() {
           </div>
         ) : currentItems.length === 0 && !newItemType ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <Folder className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <p className="text-muted-foreground">这里还没有素材</p>
+            <Zap className="h-12 w-12 text-muted-foreground/40 mb-4" />
+            <p className="text-muted-foreground">这里还没有技能</p>
           </div>
         ) : (
           <div className="space-y-1">
@@ -232,7 +232,12 @@ export default function MaterialsPage() {
                     className="flex w-full items-center gap-3 rounded-lg px-4 py-3 transition-colors hover:bg-muted/50"
                   >
                     <Folder className="h-5 w-5 text-amber-500 shrink-0" />
-                    <span className="flex-1 text-left text-sm font-medium truncate">{folder.name}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{folder.name}</p>
+                      {folder.description && (
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">{folder.description}</p>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
@@ -280,8 +285,8 @@ export default function MaterialsPage() {
                   <div
                     role="button"
                     tabIndex={0}
-                    onClick={async () => await openMaterial(file.id)}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openMaterial(file.id) }}
+                    onClick={async () => await openSkill(file.id)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openSkill(file.id) }}
                     className="flex w-full items-center gap-3 rounded-lg px-4 py-3 transition-colors hover:bg-muted/50"
                   >
                     <FileText className="h-5 w-5 text-muted-foreground shrink-0" />

@@ -1,19 +1,32 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { countOutlineSections } from '@/lib/utils'
 import { useStoryStore } from '@/stores/story-store'
-import { ArrowLeft, Loader2, RefreshCw, Check, X } from 'lucide-react'
+import { ArrowLeft, Loader2, RefreshCw } from 'lucide-react'
 
 export default function OutlinePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { currentStory, sections, fetchStory, generateOutline, confirmOutline, isLoading } = useStoryStore()
-  const [outlineText, setOutlineText] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [streamingText, setStreamingText] = useState('')
-  const [editDraft, setEditDraft] = useState('')
+  const [draftState, setDraftState] = useState<{ storyId: string; value: string } | null>(null)
   const [isConfirming, setIsConfirming] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const storyKey = currentStory?.id || id || ''
+  const rebuiltOutline = sections.length > 0
+    ? [...sections]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((sec, i) => {
+        const wc = sec.targetWordCount ? `（${sec.targetWordCount}字）` : ''
+        return `### 第${i + 1}章 ${sec.title}${wc}\n\n${sec.summary || ''}`
+      })
+      .join('\n\n')
+    : ''
+  const sourceOutline = currentStory?.outline || rebuiltOutline
+  const editDraft = draftState?.storyId === storyKey ? draftState.value : sourceOutline
+  const showOutlineContent = editDraft.trim().length > 0 && !isGenerating
 
   const resizeTextarea = useCallback(() => {
     const el = textareaRef.current
@@ -24,54 +37,31 @@ export default function OutlinePage() {
     window.scrollTo(0, savedScrollY)
   }, [])
 
-  useLayoutEffect(() => {
-    resizeTextarea()
-  }, [editDraft, resizeTextarea])
+  const isTextareaVisible = showOutlineContent && !isLoading
 
-  // textarea 挂载后（outlineText 从 null 变为有值），同步调整高度
   useLayoutEffect(() => {
-    if (outlineText !== null && !isGenerating) {
+    if (!isTextareaVisible) return
+
+    const frame = requestAnimationFrame(() => {
       resizeTextarea()
-    }
-  }, [outlineText, isGenerating, resizeTextarea])
+    })
+
+    return () => cancelAnimationFrame(frame)
+  }, [editDraft, isTextareaVisible, resizeTextarea])
 
   useEffect(() => {
     if (id) fetchStory(id)
   }, [id, fetchStory])
 
-  // 从 sections 同步大纲文本（已确认的大纲，sections 存在）
-  useEffect(() => {
-    if (outlineText === null && !isGenerating) {
-      // 优先使用后端返回的大纲全文
-      if (currentStory?.outline) {
-        setOutlineText(currentStory.outline)
-        setEditDraft(currentStory.outline)
-      } else if (sections.length > 0) {
-        // 回退：从 sections 重建
-        const text = sections
-          .sort((a, b) => a.sortOrder - b.sortOrder)
-          .map((sec, i) => {
-            const wc = sec.targetWordCount ? `（${sec.targetWordCount}字）` : ''
-            return `### 第${i + 1}章 ${sec.title}${wc}\n\n${sec.summary || ''}`
-          })
-          .join('\n\n')
-        setOutlineText(text)
-        setEditDraft(text)
-      }
-    }
-  }, [currentStory, sections, outlineText, isGenerating])
-
   const handleGenerate = async () => {
-    if (!id) return
+    if (!storyKey) return
     setIsGenerating(true)
     setStreamingText('')
-    setOutlineText(null)
     try {
-      const result = await generateOutline(id, (chunk) => {
+      const result = await generateOutline(storyKey, (chunk) => {
         setStreamingText(prev => prev + chunk)
       })
-      setOutlineText(result)
-      setEditDraft(result)
+      setDraftState({ storyId: storyKey, value: result })
     } catch {
       // 错误处理
     } finally {
@@ -80,12 +70,11 @@ export default function OutlinePage() {
   }
 
   const handleConfirm = async () => {
-    if (!id || !editDraft) return
-    setOutlineText(editDraft)
+    if (!storyKey || !editDraft) return
     setIsConfirming(true)
     try {
-      await confirmOutline(id, editDraft)
-      navigate(`/stories/${encodeURIComponent(id)}/write`)
+      await confirmOutline(storyKey, editDraft)
+      navigate(`/stories/${encodeURIComponent(storyKey)}`)
     } catch {
       // 错误处理
     } finally {
@@ -94,7 +83,6 @@ export default function OutlinePage() {
   }
 
   const hasSections = sections.length > 0
-  const showOutlineContent = outlineText !== null && !isGenerating
 
   return (
     <div className="min-h-screen bg-background">
@@ -129,12 +117,13 @@ export default function OutlinePage() {
           /* 大纲内容 */
           <section className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              大纲已生成，共 {editDraft.split(/(?=### 第\d+章)/).filter(s => s.trim()).length} 个章节
+              大纲已生成，共 {countOutlineSections(editDraft)} 个章节
             </p>
             <textarea
               ref={textareaRef}
+              rows={1}
               value={editDraft}
-              onChange={e => setEditDraft(e.target.value)}
+              onChange={e => setDraftState({ storyId: storyKey, value: e.target.value })}
               className="w-full rounded-lg bg-muted/30 p-5 font-serif text-sm leading-[1.8] text-foreground whitespace-pre-wrap resize-none overflow-hidden focus:outline-none"
             />
             <div className="flex gap-3 pt-2">
@@ -178,7 +167,7 @@ export default function OutlinePage() {
               <Button variant="outline" className="flex-1" onClick={handleGenerate}>
                 <RefreshCw className="h-4 w-4 mr-2" /> 重新生成
               </Button>
-              <Button className="flex-1" size="lg" onClick={() => navigate(`/stories/${encodeURIComponent(id || '')}/write`)}>
+              <Button className="flex-1" size="lg" onClick={() => navigate(`/stories/${encodeURIComponent(id || '')}`)}>
                 进入写作
               </Button>
             </div>

@@ -13,6 +13,13 @@ function parseStory(raw: Record<string, unknown>): Story {
   } as Story
 }
 
+function normalizeSection(section: Section): Section {
+  return {
+    ...section,
+    status: section.status === 'locked' ? 'review' : section.status,
+  }
+}
+
 interface StoryState {
   stories: Story[]
   currentStory: Story | null
@@ -35,6 +42,7 @@ interface StoryState {
   updateSectionStatus: (sectionId: string, status: Section['status']) => Promise<void>
   reorderSections: (fromIndex: number, toIndex: number) => void
   deleteSection: (sectionId: string) => void
+  deleteStory: (storyId: string) => Promise<void>
 }
 
 export const useStoryStore = create<StoryState>((set, get) => ({
@@ -60,7 +68,7 @@ export const useStoryStore = create<StoryState>((set, get) => ({
       const { data } = await api.get(`/stories/${encodeURIComponent(id)}`)
       const raw = data.data as Record<string, unknown>
       const story = parseStory(raw)
-      const sections = (raw.sections as Section[]) || []
+      const sections = ((raw.sections as Section[]) || []).map(normalizeSection)
       set({ currentStory: story, sections, isLoading: false })
     } catch {
       set({ isLoading: false })
@@ -147,7 +155,7 @@ export const useStoryStore = create<StoryState>((set, get) => ({
   },
 
   confirmOutline: async (storyId: string, text: string) => {
-    await api.post('/api/v1/generate/outline/confirm', { storyId, text })
+    await api.post('/generate/outline/confirm', { storyId, text })
     await get().fetchStory(storyId)
   },
 
@@ -162,10 +170,8 @@ export const useStoryStore = create<StoryState>((set, get) => ({
         fullText += text
         onChunk(text)
       },
-      onDone: () => {
-        get().fetchStory(storyId)
-      },
     })
+    await get().fetchStory(storyId)
     return fullText
   },
 
@@ -189,6 +195,14 @@ export const useStoryStore = create<StoryState>((set, get) => ({
   deleteSection: (sectionId: string) => {
     set(state => ({
       sections: state.sections.filter(s => s.id !== sectionId).map((s, i) => ({ ...s, sortOrder: i })),
+    }))
+  },
+
+  deleteStory: async (storyId: string) => {
+    await api.delete(`/stories/${encodeURIComponent(storyId)}`)
+    set(state => ({
+      stories: state.stories.filter(s => s.id !== storyId),
+      currentStory: state.currentStory?.id === storyId ? null : state.currentStory,
     }))
   },
 }))

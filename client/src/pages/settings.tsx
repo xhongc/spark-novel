@@ -5,7 +5,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useStoryStore } from '@/stores/story-store'
 import { api } from '@/lib/api-client'
 import BottomNav from '@/components/bottom-nav'
-import { LogOut, User, BookOpen, FolderOpen, ChevronRight, Moon, Info } from 'lucide-react'
+import { LogOut, User, BookOpen, FolderOpen, Moon, Info } from 'lucide-react'
 
 export default function SettingsPage() {
   const navigate = useNavigate()

@@ -48,6 +48,17 @@ export interface Material {
   updatedAt: string
 }
 
+export interface Skill {
+  id: string
+  name: string
+  type: 'folder' | 'file'
+  content?: string
+  description?: string
+  parentId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface OutlineItem {
   title: string
   summary: string
@@ -64,4 +75,20 @@ export interface ChatMessage {
     original: string
     modified: string
   }
+}
+
+export interface ChatReference {
+  id: string
+  name: string
+  content: string
+}
+
+export interface ChatContext {
+  currentPath?: string
+  currentStoryTitle?: string
+  currentSectionTitle?: string
+  currentSectionContent?: string
+  selectedText?: string
+  referencedMaterials?: ChatReference[]
+  referencedSkills?: ChatReference[]
 }

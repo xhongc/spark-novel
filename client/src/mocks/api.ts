@@ -8,16 +8,18 @@ function delay(ms: number) {
 
 export const mockApi = {
   auth: {
-    async login(email: string, _password: string): Promise<{ user: User; accessToken: string; refreshToken: string }> {
+    async login(email: string, password: string): Promise<{ user: User; accessToken: string; refreshToken: string }> {
       await delay(API_DELAY)
+      void password
       return {
         user: { id: 'user-1', email, nickname: '作者小明', createdAt: '2026-06-01T00:00:00Z' },
         accessToken: 'mock-access-token',
         refreshToken: 'mock-refresh-token',
       }
     },
-    async register(email: string, _password: string, nickname: string, inviteCode: string): Promise<{ user: User; accessToken: string; refreshToken: string }> {
+    async register(email: string, password: string, nickname: string, inviteCode: string): Promise<{ user: User; accessToken: string; refreshToken: string }> {
       await delay(API_DELAY)
+      void password
       const validCode = import.meta.env.VITE_INVITE_CODE
       if (inviteCode !== validCode) {
         throw new Error('邀请码无效')

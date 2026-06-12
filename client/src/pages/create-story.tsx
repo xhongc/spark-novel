@@ -20,10 +20,9 @@ const randomInspirations = [
 export default function CreateStoryPage() {
   const [premise, setPremise] = useState('')
   const [isCreating, setIsCreating] = useState(false)
+  const [placeholder] = useState(() => placeholders[Math.floor(Math.random() * placeholders.length)])
   const { createStory } = useStoryStore()
   const navigate = useNavigate()
-
-  const placeholder = placeholders[Math.floor(Math.random() * placeholders.length)]
 
   const handleCreate = async () => {
     if (!premise.trim() || isCreating) return

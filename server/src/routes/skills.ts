@@ -4,7 +4,35 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authGuard } from "../plugins/auth.js";
 
-const WORKSPACE_ROOT = path.resolve(process.cwd(), "workspace", "knowledge");
+const WORKSPACE_ROOT = path.resolve(process.cwd(), "workspace", ".pi", "skills");
+
+// 解析 SKILL.md frontmatter 中的 description
+async function parseSkillDescription(skillMdPath: string): Promise<string | undefined> {
+  try {
+    const raw = await fs.readFile(skillMdPath, "utf-8");
+    const match = raw.match(/^---\s*\n([\s\S]*?)\n---/);
+    if (!match) return undefined;
+    const fm = match[1];
+
+    // 引号格式: description: "..."
+    const quoted = fm.match(/description:\s*"([^"]*)"/);
+    if (quoted) return quoted[1].trim();
+
+    // 多行格式: description: |  (以下一个顶层 key 或 frontmatter 结尾)
+    const block = fm.match(/description:\s*\|\s*\n([\s\S]*?)(?=\n\w+:|\s*$)/);
+    if (block) {
+      return block[1]
+        .split("\n")
+        .map(line => line.trim())
+        .filter(Boolean)
+        .join(" ");
+    }
+
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // 确保根目录存在
 await fs.mkdir(WORKSPACE_ROOT, { recursive: true });
@@ -17,11 +45,12 @@ function safePath(relativePath: string): string {
   return resolved;
 }
 
-interface MaterialItem {
+interface SkillItem {
   id: string;
   name: string;
   type: "folder" | "file";
   parentId: string | null;
+  description?: string;
   updatedAt: string;
 }
 
@@ -43,22 +72,30 @@ function getMatchScore(value: string, query: string): number {
   return Number.MAX_SAFE_INTEGER;
 }
 
-async function collectMaterialFiles(dir: string, relativeDir = ""): Promise<MaterialItem[]> {
+async function collectSkills(dir: string, relativeDir = ""): Promise<SkillItem[]> {
   const entries = await fs.readdir(dir, { withFileTypes: true });
-  const items: MaterialItem[] = [];
+  const items: SkillItem[] = [];
 
   for (const entry of entries) {
     if (entry.name.startsWith(".")) continue;
 
     const entryPath = path.join(relativeDir, entry.name);
     const absPath = path.join(dir, entry.name);
+    const stat = await fs.stat(absPath);
 
     if (entry.isDirectory()) {
-      items.push(...await collectMaterialFiles(absPath, entryPath));
+      items.push({
+        id: entryPath,
+        name: entry.name,
+        type: "folder",
+        parentId: getParentId(entryPath),
+        description: await parseSkillDescription(path.join(absPath, "SKILL.md")),
+        updatedAt: stat.mtime.toISOString(),
+      });
+      items.push(...await collectSkills(absPath, entryPath));
       continue;
     }
 
-    const stat = await fs.stat(absPath);
     items.push({
       id: entryPath,
       name: entry.name,
@@ -71,11 +108,11 @@ async function collectMaterialFiles(dir: string, relativeDir = ""): Promise<Mate
   return items;
 }
 
-export async function materialsRoutes(fastify: FastifyInstance): Promise<void> {
+export async function skillRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook("onRequest", authGuard);
 
-  // 统计素材数量（递归）
-  fastify.get("/materials/stats", async () => {
+  // 统计技能数量（递归）
+  fastify.get("/skills/stats", async () => {
     async function countDir(dir: string): Promise<{ files: number; folders: number }> {
       let files = 0;
       let folders = 0;
@@ -101,24 +138,25 @@ export async function materialsRoutes(fastify: FastifyInstance): Promise<void> {
     return { success: true, data: stats };
   });
 
-  fastify.get("/materials/search", async (req, reply) => {
-    const { q = "", limit = 5 } = z.object({
+  fastify.get("/skills/search", async (req, reply) => {
+    const { q = "", limit = 6 } = z.object({
       q: z.string().optional(),
       limit: z.coerce.number().int().min(1).max(20).optional(),
     }).parse(req.query);
 
     try {
       const query = q.trim().toLowerCase();
-      const items = await collectMaterialFiles(WORKSPACE_ROOT);
+      const items = await collectSkills(WORKSPACE_ROOT);
       const matches = items
         .filter((item) => (
           !query
           || item.name.toLowerCase().includes(query)
-          || item.id.toLowerCase().includes(query)
         ))
         .sort((a, b) => {
           const scoreDiff = getMatchScore(a.name, query) - getMatchScore(b.name, query);
           if (scoreDiff !== 0) return scoreDiff;
+
+          if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
 
           return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
         })
@@ -128,32 +166,38 @@ export async function materialsRoutes(fastify: FastifyInstance): Promise<void> {
     } catch {
       return reply.status(500).send({
         success: false,
-        error: { code: "FS_ERROR", message: "搜索素材失败" },
+        error: { code: "FS_ERROR", message: "搜索技能失败" },
       });
     }
   });
 
   // 列出目录内容
-  fastify.get("/materials", async (req, reply) => {
+  fastify.get("/skills", async (req, reply) => {
     const { path: dirPath = "" } = req.query as { path?: string };
     const absDir = safePath(dirPath);
 
     try {
       await fs.mkdir(absDir, { recursive: true });
       const entries = await fs.readdir(absDir, { withFileTypes: true });
-      const items: MaterialItem[] = [];
+      const items: SkillItem[] = [];
 
       for (const entry of entries) {
         if (entry.name.startsWith(".")) continue;
         const entryPath = path.join(dirPath, entry.name);
         const stat = await fs.stat(path.join(absDir, entry.name));
-        items.push({
+        const item: SkillItem = {
           id: entryPath,
           name: entry.name,
           type: entry.isDirectory() ? "folder" : "file",
           parentId: dirPath || null,
           updatedAt: stat.mtime.toISOString(),
-        });
+        };
+        if (entry.isDirectory()) {
+          item.description = await parseSkillDescription(
+            path.join(absDir, entry.name, "SKILL.md")
+          );
+        }
+        items.push(item);
       }
 
       // 文件夹排前面，文件按修改时间倒序
@@ -172,7 +216,7 @@ export async function materialsRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   // 创建文件夹
-  fastify.post("/materials/folder", async (req, reply) => {
+  fastify.post("/skills/folder", async (req, reply) => {
     const { name, parentId = "" } = z.object({
       name: z.string().min(1).max(100),
       parentId: z.string().optional(),
@@ -203,7 +247,7 @@ export async function materialsRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   // 创建 md 文件
-  fastify.post("/materials/file", async (req, reply) => {
+  fastify.post("/skills/file", async (req, reply) => {
     const { name, parentId = "", content = "" } = z.object({
       name: z.string().min(1).max(100),
       parentId: z.string().optional(),
@@ -238,7 +282,7 @@ export async function materialsRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   // 读取文件内容
-  fastify.get("/materials/file", async (req, reply) => {
+  fastify.get("/skills/file", async (req, reply) => {
     const { path: filePath } = req.query as { path: string };
     if (!filePath) {
       return reply.status(400).send({
@@ -260,7 +304,7 @@ export async function materialsRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   // 保存文件内容
-  fastify.put("/materials/file", async (req, reply) => {
+  fastify.put("/skills/file", async (req, reply) => {
     const { path: filePath, content } = z.object({
       path: z.string(),
       content: z.string(),
@@ -283,7 +327,7 @@ export async function materialsRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   // 重命名
-  fastify.put("/materials/rename", async (req, reply) => {
+  fastify.put("/skills/rename", async (req, reply) => {
     const { path: oldPath, newName } = z.object({
       path: z.string(),
       newName: z.string().min(1).max(100),
@@ -309,7 +353,7 @@ export async function materialsRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   // 删除
-  fastify.delete("/materials", async (req, reply) => {
+  fastify.delete("/skills", async (req, reply) => {
     const { path: targetPath } = req.body as { path: string };
     if (!targetPath) {
       return reply.status(400).send({
