@@ -1,0 +1,118 @@
+import { useEffect } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { useStoryStore } from '@/stores/story-store'
+import { useAuthStore } from '@/stores/auth-store'
+import { Plus, LogOut, BookOpen, Loader2 } from 'lucide-react'
+import type { StoryStage } from '@/types'
+
+const stageLabels: Record<StoryStage, { text: string; color: string }> = {
+  setting: { text: '设定中', color: 'text-blue-600 bg-blue-50' },
+  outline: { text: '大纲中', color: 'text-amber-600 bg-amber-50' },
+  writing: { text: '写作中', color: 'text-emerald-600 bg-emerald-50' },
+  completed: { text: '已完成', color: 'text-gray-600 bg-gray-100' },
+}
+
+export default function StoryListPage() {
+  const { stories, isLoading, fetchStories } = useStoryStore()
+  const { user, logout } = useAuthStore()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    fetchStories()
+  }, [fetchStories])
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
+
+  const getStageRoute = (storyId: string, stage: StoryStage) => {
+    const routes: Record<StoryStage, string> = {
+      setting: `/stories/${storyId}/setting`,
+      outline: `/stories/${storyId}/outline`,
+      writing: `/stories/${storyId}`,
+      completed: `/stories/${storyId}`,
+    }
+    return routes[stage]
+  }
+
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr)
+    return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm">
+        <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-4">
+          <h1 className="text-lg font-semibold">我的故事</h1>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">{user?.nickname}</span>
+            <Button variant="ghost" size="icon" onClick={handleLogout}>
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-2xl px-4 py-6">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : stories.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <BookOpen className="h-12 w-12 text-muted-foreground/40 mb-4" />
+            <p className="text-muted-foreground mb-4">还没有故事，开始你的第一个故事吧</p>
+            <Button onClick={() => navigate('/stories/new')}>
+              <Plus className="h-4 w-4 mr-2" /> 创建新故事
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {stories.map(story => (
+              <Link key={story.id} to={getStageRoute(story.id, story.stage)}>
+                <Card className="transition-shadow hover:shadow-md cursor-pointer">
+                  <CardContent className="flex items-center justify-between p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                        <BookOpen className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium">{story.title}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {story.stage === 'completed'
+                            ? `共 ${story.sectionCount} 节`
+                            : story.stage === 'writing'
+                              ? `${Math.round(story.currentWordCount / 1000)}k / ${story.targetWordCount ? Math.round(story.targetWordCount / 1000) + 'k' : '?'} 字`
+                              : stageLabels[story.stage].text}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${stageLabels[story.stage].color}`}>
+                        {stageLabels[story.stage].text}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{formatDate(story.updatedAt)}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+
+            <button
+              type="button"
+              onClick={() => navigate('/stories/new')}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-muted/30 p-6 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+            >
+              <Plus className="h-5 w-5" />
+              <span>创建新故事</span>
+            </button>
+          </div>
+        )}
+      </main>
+    </div>
+  )
+}
