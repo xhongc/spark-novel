@@ -17,6 +17,8 @@ import {
   Minimize2,
   Send,
   Sparkles,
+  Square,
+  Trash2,
   X,
   Zap,
 } from 'lucide-react'
@@ -89,7 +91,9 @@ export default function AIWritingAssistant() {
     isChatSending,
     openChat,
     closeChat,
+    clearChatMessages,
     sendMessage,
+    stopChatMessage,
   } = useWritingStore()
 
   const [chatInput, setChatInput] = useState('')
@@ -175,14 +179,16 @@ export default function AIWritingAssistant() {
 
           if (cancelled) return
 
-          const nextSuggestions = (data.data as Skill[]).map(skill => ({
-            id: skill.id,
-            name: skill.name,
-            kind: 'skill' as const,
-            itemType: skill.type,
-            parentId: skill.parentId,
-            description: skill.description,
-          }))
+          const nextSuggestions = (data.data as Skill[])
+            .filter(skill => skill.type === 'folder')
+            .map(skill => ({
+              id: skill.id,
+              name: skill.name,
+              kind: 'skill' as const,
+              itemType: skill.type,
+              parentId: skill.parentId,
+              description: skill.description,
+            }))
 
           setSuggestions(nextSuggestions)
           setHighlightedIndex(0)
@@ -338,6 +344,17 @@ export default function AIWritingAssistant() {
     setSelectedReferences([])
   }
 
+  const handleClearChat = () => {
+    clearChatMessages()
+    setChatInput('')
+    setCaretPosition(0)
+    setLookup(null)
+    setDismissedLookupKey(null)
+    setSuggestions([])
+    setHighlightedIndex(0)
+    setSelectedReferences([])
+  }
+
   if (chatMode === 'collapsed') {
     return (
       <button
@@ -361,6 +378,16 @@ export default function AIWritingAssistant() {
         <div className="flex h-10 items-center justify-between px-4 shadow-sm">
           <span className="text-sm font-medium">AI 写作助手</span>
           <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={handleClearChat}
+              title="清空会话"
+              aria-label="清空会话"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -551,9 +578,22 @@ export default function AIWritingAssistant() {
                 className="flex-1"
                 disabled={isChatSending}
               />
-              <Button size="icon" className="shrink-0" onClick={() => void handleSendChat()} disabled={!chatInput.trim() || isChatSending}>
-                <Send className="h-4 w-4" />
-              </Button>
+              {isChatSending ? (
+                <Button
+                  size="icon"
+                  variant="destructive"
+                  className="shrink-0"
+                  onClick={stopChatMessage}
+                  title="终止回复"
+                  aria-label="终止回复"
+                >
+                  <Square className="h-4 w-4 fill-current" />
+                </Button>
+              ) : (
+                <Button size="icon" className="shrink-0" onClick={() => void handleSendChat()} disabled={!chatInput.trim()}>
+                  <Send className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
         </div>

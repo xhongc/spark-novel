@@ -5,10 +5,15 @@ export interface SSECallbacks {
   onStart?: (data: Record<string, unknown>) => void;
 }
 
+export interface SSEOptions {
+  signal?: AbortSignal;
+}
+
 export async function streamGenerate(
   url: string,
   body: unknown,
   callbacks: SSECallbacks,
+  options?: SSEOptions,
 ): Promise<void> {
   const token = localStorage.getItem("accessToken");
 
@@ -19,6 +24,7 @@ export async function streamGenerate(
       ...(token && { Authorization: `Bearer ${token}` }),
     },
     body: JSON.stringify(body),
+    signal: options?.signal,
   });
 
   if (!res.ok) {

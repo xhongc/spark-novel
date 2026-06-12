@@ -4,6 +4,9 @@ import type { ChatContext, ChatMessage } from '@/types'
 
 type ChatMode = 'collapsed' | 'half' | 'fullscreen'
 
+let activeChatAbortController: AbortController | null = null
+let activeChatRequestId: string | null = null
+
 interface WritingState {
   currentSectionIndex: number
   isEditing: boolean
@@ -21,6 +24,8 @@ interface WritingState {
   openChat: (mode?: ChatMode) => void
   closeChat: () => void
   toggleDrawer: () => void
+  clearChatMessages: () => void
+  stopChatMessage: () => void
   sendMessage: (content: string, context?: ChatContext) => Promise<void>
   startGeneration: (sectionId: string) => void
   stopGeneration: () => void
@@ -49,8 +54,26 @@ export const useWritingStore = create<WritingState>((set, get) => ({
 
   toggleDrawer: () => set(state => ({ isDrawerOpen: !state.isDrawerOpen })),
 
+  clearChatMessages: () => {
+    activeChatRequestId = null
+    activeChatAbortController?.abort()
+    activeChatAbortController = null
+    set({ chatMessages: [], isChatSending: false })
+  },
+
+  stopChatMessage: () => {
+    activeChatRequestId = null
+    activeChatAbortController?.abort()
+    activeChatAbortController = null
+    set({ isChatSending: false })
+  },
+
   sendMessage: async (content, context) => {
+    if (get().isChatSending) return
+
     const timestamp = Date.now()
+    const requestId = `chat-${timestamp}`
+    const abortController = new AbortController()
     const userMsg: ChatMessage = {
       id: `msg-user-${timestamp}`,
       role: 'user',
@@ -66,6 +89,10 @@ export const useWritingStore = create<WritingState>((set, get) => ({
       type: 'text',
     }
     const history = [...get().chatMessages, userMsg]
+
+    activeChatAbortController?.abort()
+    activeChatAbortController = abortController
+    activeChatRequestId = requestId
 
     set(state => ({
       chatMessages: [...state.chatMessages, userMsg, assistantMsg],
@@ -83,6 +110,7 @@ export const useWritingStore = create<WritingState>((set, get) => ({
         ...context,
       }, {
         onChunk: (text) => {
+          if (activeChatRequestId !== requestId) return
           hasResponse = true
           set(state => ({
             chatMessages: state.chatMessages.map(message => (
@@ -93,6 +121,9 @@ export const useWritingStore = create<WritingState>((set, get) => ({
           }))
         },
         onError: (message) => {
+          if (activeChatRequestId !== requestId) return
+          activeChatAbortController = null
+          activeChatRequestId = null
           set(state => ({
             chatMessages: state.chatMessages.map(chatMessage => (
               chatMessage.id === assistantMsg.id
@@ -103,6 +134,9 @@ export const useWritingStore = create<WritingState>((set, get) => ({
           }))
         },
         onDone: () => {
+          if (activeChatRequestId !== requestId) return
+          activeChatAbortController = null
+          activeChatRequestId = null
           set(state => ({
             chatMessages: state.chatMessages.map(chatMessage => (
               chatMessage.id === assistantMsg.id && !hasResponse
@@ -112,8 +146,28 @@ export const useWritingStore = create<WritingState>((set, get) => ({
             isChatSending: false,
           }))
         },
+      }, {
+        signal: abortController.signal,
       })
-    } catch {
+    } catch (error) {
+      const isAborted = error instanceof Error && error.name === 'AbortError'
+      if (activeChatRequestId === requestId) {
+        activeChatAbortController = null
+        activeChatRequestId = null
+      }
+
+      if (isAborted) {
+        set(state => ({
+          chatMessages: state.chatMessages.map(chatMessage => (
+            chatMessage.id === assistantMsg.id && !chatMessage.content
+              ? { ...chatMessage, content: '已停止回复。' }
+              : chatMessage
+          )),
+          isChatSending: false,
+        }))
+        return
+      }
+
       set(state => ({
         chatMessages: state.chatMessages.map(chatMessage => (
           chatMessage.id === assistantMsg.id

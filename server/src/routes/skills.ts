@@ -72,35 +72,22 @@ function getMatchScore(value: string, query: string): number {
   return Number.MAX_SAFE_INTEGER;
 }
 
-async function collectSkills(dir: string, relativeDir = ""): Promise<SkillItem[]> {
-  const entries = await fs.readdir(dir, { withFileTypes: true });
+async function collectTopLevelSkillFolders(): Promise<SkillItem[]> {
+  const entries = await fs.readdir(WORKSPACE_ROOT, { withFileTypes: true });
   const items: SkillItem[] = [];
 
   for (const entry of entries) {
-    if (entry.name.startsWith(".")) continue;
+    if (entry.name.startsWith(".") || !entry.isDirectory()) continue;
 
-    const entryPath = path.join(relativeDir, entry.name);
-    const absPath = path.join(dir, entry.name);
+    const absPath = path.join(WORKSPACE_ROOT, entry.name);
     const stat = await fs.stat(absPath);
 
-    if (entry.isDirectory()) {
-      items.push({
-        id: entryPath,
-        name: entry.name,
-        type: "folder",
-        parentId: getParentId(entryPath),
-        description: await parseSkillDescription(path.join(absPath, "SKILL.md")),
-        updatedAt: stat.mtime.toISOString(),
-      });
-      items.push(...await collectSkills(absPath, entryPath));
-      continue;
-    }
-
     items.push({
-      id: entryPath,
+      id: entry.name,
       name: entry.name,
-      type: "file",
-      parentId: getParentId(entryPath),
+      type: "folder",
+      parentId: null,
+      description: await parseSkillDescription(path.join(absPath, "SKILL.md")),
       updatedAt: stat.mtime.toISOString(),
     });
   }
@@ -146,11 +133,14 @@ export async function skillRoutes(fastify: FastifyInstance): Promise<void> {
 
     try {
       const query = q.trim().toLowerCase();
-      const items = await collectSkills(WORKSPACE_ROOT);
+      const items = await collectTopLevelSkillFolders();
       const matches = items
         .filter((item) => (
-          !query
-          || item.name.toLowerCase().includes(query)
+          item.type === "folder"
+          && (
+            !query
+            || item.name.toLowerCase().includes(query)
+          )
         ))
         .sort((a, b) => {
           const scoreDiff = getMatchScore(a.name, query) - getMatchScore(b.name, query);
