@@ -14,6 +14,7 @@ interface WritingState {
   chatMode: ChatMode
   isDrawerOpen: boolean
   chatMessages: ChatMessage[]
+  chatStatusText: string | null
   isChatSending: boolean
   isGenerating: boolean
   generatingSectionId: string | null
@@ -24,6 +25,7 @@ interface WritingState {
   openChat: (mode?: ChatMode) => void
   closeChat: () => void
   toggleDrawer: () => void
+  setChatStatusText: (status: string | null) => void
   clearChatMessages: () => void
   stopChatMessage: () => void
   sendMessage: (content: string, context?: ChatContext) => Promise<void>
@@ -38,6 +40,7 @@ export const useWritingStore = create<WritingState>((set, get) => ({
   chatMode: 'collapsed',
   isDrawerOpen: false,
   chatMessages: [],
+  chatStatusText: null,
   isChatSending: false,
   isGenerating: false,
   generatingSectionId: null,
@@ -54,18 +57,20 @@ export const useWritingStore = create<WritingState>((set, get) => ({
 
   toggleDrawer: () => set(state => ({ isDrawerOpen: !state.isDrawerOpen })),
 
+  setChatStatusText: (status) => set({ chatStatusText: status }),
+
   clearChatMessages: () => {
     activeChatRequestId = null
     activeChatAbortController?.abort()
     activeChatAbortController = null
-    set({ chatMessages: [], isChatSending: false })
+    set({ chatMessages: [], chatStatusText: null, isChatSending: false })
   },
 
   stopChatMessage: () => {
     activeChatRequestId = null
     activeChatAbortController?.abort()
     activeChatAbortController = null
-    set({ isChatSending: false })
+    set({ chatStatusText: null, isChatSending: false })
   },
 
   sendMessage: async (content, context) => {
@@ -96,6 +101,7 @@ export const useWritingStore = create<WritingState>((set, get) => ({
 
     set(state => ({
       chatMessages: [...state.chatMessages, userMsg, assistantMsg],
+      chatStatusText: '思考中...',
       isChatSending: true,
     }))
 
@@ -113,6 +119,7 @@ export const useWritingStore = create<WritingState>((set, get) => ({
           if (activeChatRequestId !== requestId) return
           hasResponse = true
           set(state => ({
+            chatStatusText: null,
             chatMessages: state.chatMessages.map(message => (
               message.id === assistantMsg.id
                 ? { ...message, content: message.content + text }
@@ -125,6 +132,7 @@ export const useWritingStore = create<WritingState>((set, get) => ({
           activeChatAbortController = null
           activeChatRequestId = null
           set(state => ({
+            chatStatusText: null,
             chatMessages: state.chatMessages.map(chatMessage => (
               chatMessage.id === assistantMsg.id
                 ? { ...chatMessage, content: message || 'AI 回复失败，请稍后重试。' }
@@ -138,6 +146,7 @@ export const useWritingStore = create<WritingState>((set, get) => ({
           activeChatAbortController = null
           activeChatRequestId = null
           set(state => ({
+            chatStatusText: null,
             chatMessages: state.chatMessages.map(chatMessage => (
               chatMessage.id === assistantMsg.id && !hasResponse
                 ? { ...chatMessage, content: 'AI 暂时没有返回内容，请重试。' }
@@ -158,6 +167,7 @@ export const useWritingStore = create<WritingState>((set, get) => ({
 
       if (isAborted) {
         set(state => ({
+          chatStatusText: null,
           chatMessages: state.chatMessages.map(chatMessage => (
             chatMessage.id === assistantMsg.id && !chatMessage.content
               ? { ...chatMessage, content: '已停止回复。' }
@@ -169,6 +179,7 @@ export const useWritingStore = create<WritingState>((set, get) => ({
       }
 
       set(state => ({
+        chatStatusText: null,
         chatMessages: state.chatMessages.map(chatMessage => (
           chatMessage.id === assistantMsg.id
             ? { ...chatMessage, content: 'AI 回复失败，请稍后重试。' }

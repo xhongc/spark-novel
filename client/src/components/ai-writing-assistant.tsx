@@ -76,10 +76,31 @@ function matchesQuery(value: string, query: string): boolean {
   return value.toLowerCase().includes(query.trim().toLowerCase())
 }
 
+function getReferenceLoadingStatus(references: AssistantSuggestion[]): string | null {
+  if (references.length === 0) return null
+
+  const materialCount = references.filter(reference => reference.kind === 'material').length
+  const skillCount = references.filter(reference => reference.kind === 'skill').length
+
+  if (materialCount > 0 && skillCount > 0) {
+    return `正在读取 ${skillCount} 个技能和 ${materialCount} 个素材...`
+  }
+
+  if (skillCount > 0) return `正在读取 ${skillCount} 个技能...`
+  return `正在读取 ${materialCount} 个素材...`
+}
+
+function getImplicitPrompt(materialCount: number, skillCount: number): string {
+  if (materialCount > 0 && skillCount > 0) return '请根据我调用的技能和引用的素材继续处理。'
+  if (skillCount > 0) return '请根据我调用的技能继续处理。'
+  return '请根据我引用的素材继续处理。'
+}
+
 export default function AIWritingAssistant() {
   const location = useLocation()
   const inputRef = useRef<HTMLInputElement>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const isComposingRef = useRef(false)
 
   const { currentStory, sections } = useStoryStore()
   const { currentMaterial } = useMaterialsStore()
@@ -89,8 +110,10 @@ export default function AIWritingAssistant() {
     currentSectionIndex,
     selectedText,
     isChatSending,
+    chatStatusText,
     openChat,
     closeChat,
+    setChatStatusText,
     clearChatMessages,
     sendMessage,
     stopChatMessage,
@@ -98,16 +121,17 @@ export default function AIWritingAssistant() {
 
   const [chatInput, setChatInput] = useState('')
   const [caretPosition, setCaretPosition] = useState(0)
-  const [lookup, setLookup] = useState<LookupState | null>(null)
   const [dismissedLookupKey, setDismissedLookupKey] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState<AssistantSuggestion[]>([])
   const [isSuggestionLoading, setIsSuggestionLoading] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [selectedReferences, setSelectedReferences] = useState<AssistantSuggestion[]>([])
+  const [pendingStatusText, setPendingStatusText] = useState<string | null>(null)
 
   const isWritingRoute = /^\/stories\/[^/]+$/.test(location.pathname)
   const isMaterialsRoute = location.pathname === '/materials'
   const currentSection = sections[currentSectionIndex]
+  const visibleStatusText = pendingStatusText || chatStatusText
 
   const currentPageMaterial = useMemo(() => {
     if (isMaterialsRoute && currentMaterial?.type === 'file') {
@@ -138,22 +162,16 @@ export default function AIWritingAssistant() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatMessages])
+  }, [chatMessages, visibleStatusText])
 
-  useEffect(() => {
+  const lookup = useMemo(() => {
     const nextLookup = getLookupState(chatInput, caretPosition)
-    if (!nextLookup) {
-      setLookup(null)
-      return
-    }
+    if (!nextLookup) return null
 
     const nextLookupKey = `${nextLookup.trigger}:${nextLookup.start}:${nextLookup.query}`
-    if (dismissedLookupKey === nextLookupKey) {
-      setLookup(null)
-      return
-    }
+    if (dismissedLookupKey === nextLookupKey) return null
 
-    setLookup(nextLookup)
+    return nextLookup
   }, [chatInput, caretPosition, dismissedLookupKey])
 
   useEffect(() => {
@@ -257,7 +275,6 @@ export default function AIWritingAssistant() {
     const nextInput = removeLookupToken(chatInput, lookup)
     setChatInput(nextInput)
     setCaretPosition(nextInput.length)
-    setLookup(null)
     setSuggestions([])
     setHighlightedIndex(0)
 
@@ -306,7 +323,13 @@ export default function AIWritingAssistant() {
 
   const handleSendChat = async () => {
     const content = chatInput.trim()
-    if (!content || isChatSending) return
+    const hasSelectedReferences = selectedReferences.length > 0
+    if ((!content && !hasSelectedReferences) || isChatSending) return
+
+    const referenceLoadingStatus = getReferenceLoadingStatus(selectedReferences)
+    if (referenceLoadingStatus) {
+      setPendingStatusText(referenceLoadingStatus)
+    }
 
     const resolvedReferences = await Promise.all(
       selectedReferences.map(async (reference) => {
@@ -325,30 +348,40 @@ export default function AIWritingAssistant() {
     const referencedSkills = resolvedReferences
       .filter((item): item is { kind: 'material' | 'skill'; reference: ChatReference } => !!item && item.kind === 'skill')
       .map(item => item.reference)
+    const hasResolvedReferences = referencedMaterials.length > 0 || referencedSkills.length > 0
+    const nextContent = content || getImplicitPrompt(referencedMaterials.length, referencedSkills.length)
 
-    await sendMessage(content, {
-      currentPath: location.pathname,
-      currentStoryTitle: currentStory?.title,
-      currentSectionTitle: isWritingRoute ? currentSection?.title : undefined,
-      currentSectionContent: isWritingRoute ? currentSection?.content : undefined,
-      selectedText: selectedText || undefined,
-      referencedMaterials: referencedMaterials.length > 0 ? referencedMaterials : undefined,
-      referencedSkills: referencedSkills.length > 0 ? referencedSkills : undefined,
-    })
+    setPendingStatusText(null)
 
-    setChatInput('')
-    setCaretPosition(0)
-    setLookup(null)
-    setDismissedLookupKey(null)
-    setSuggestions([])
-    setSelectedReferences([])
+    if (!content && !hasResolvedReferences) return
+
+    try {
+      await sendMessage(nextContent, {
+        currentPath: location.pathname,
+        currentStoryTitle: currentStory?.title,
+        currentSectionTitle: isWritingRoute ? currentSection?.title : undefined,
+        currentSectionContent: isWritingRoute ? currentSection?.content : undefined,
+        selectedText: selectedText || undefined,
+        referencedMaterials: referencedMaterials.length > 0 ? referencedMaterials : undefined,
+        referencedSkills: referencedSkills.length > 0 ? referencedSkills : undefined,
+      })
+
+      setChatInput('')
+      setCaretPosition(0)
+      setDismissedLookupKey(null)
+      setSuggestions([])
+      setSelectedReferences([])
+    } finally {
+      setPendingStatusText(null)
+    }
   }
 
   const handleClearChat = () => {
+    setPendingStatusText(null)
+    setChatStatusText(null)
     clearChatMessages()
     setChatInput('')
     setCaretPosition(0)
-    setLookup(null)
     setDismissedLookupKey(null)
     setSuggestions([])
     setHighlightedIndex(0)
@@ -405,46 +438,54 @@ export default function AIWritingAssistant() {
         <div className="flex-1 overflow-y-auto">
           <div className="space-y-4 p-4">
             {chatMessages.map(msg => (
-              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
-                    msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                  }`}
-                >
-                  {msg.type === 'diff' && msg.diffData ? (
-                    <div className="space-y-2">
-                      <p>{msg.content}</p>
-                      <div className="overflow-hidden rounded-lg text-xs shadow-sm">
-                        <div className="bg-red-50 px-3 py-2 text-red-600 line-through">
-                          {msg.diffData.original}
-                        </div>
-                        <div className="bg-emerald-50 px-3 py-2 text-emerald-700">
-                          {msg.diffData.modified}
-                        </div>
-                        <div className="flex shadow-[inset_0_1px_0_rgba(0,0,0,0.06)]">
-                          <button
-                            type="button"
-                            className="flex-1 px-3 py-2 text-center font-medium transition-colors hover:bg-muted"
-                          >
-                            接受
-                          </button>
-                          <button
-                            type="button"
-                            className="flex-1 px-3 py-2 text-center shadow-[inset_1px_0_0_rgba(0,0,0,0.06)] transition-colors hover:bg-muted"
-                          >
-                            拒绝
-                          </button>
+              msg.role === 'assistant' && msg.type !== 'diff' && !msg.content ? null : (
+                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
+                      msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                    }`}
+                  >
+                    {msg.type === 'diff' && msg.diffData ? (
+                      <div className="space-y-2">
+                        <p>{msg.content}</p>
+                        <div className="overflow-hidden rounded-lg text-xs shadow-sm">
+                          <div className="bg-red-50 px-3 py-2 text-red-600 line-through">
+                            {msg.diffData.original}
+                          </div>
+                          <div className="bg-emerald-50 px-3 py-2 text-emerald-700">
+                            {msg.diffData.modified}
+                          </div>
+                          <div className="flex shadow-[inset_0_1px_0_rgba(0,0,0,0.06)]">
+                            <button
+                              type="button"
+                              className="flex-1 px-3 py-2 text-center font-medium transition-colors hover:bg-muted"
+                            >
+                              接受
+                            </button>
+                            <button
+                              type="button"
+                              className="flex-1 px-3 py-2 text-center shadow-[inset_1px_0_0_rgba(0,0,0,0.06)] transition-colors hover:bg-muted"
+                            >
+                              拒绝
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <p className="whitespace-pre-wrap font-serif">
-                      {msg.content || (msg.role === 'assistant' && isChatSending ? '思考中...' : '')}
-                    </p>
-                  )}
+                    ) : (
+                      <p className="whitespace-pre-wrap font-serif">{msg.content}</p>
+                    )}
+                  </div>
+                </div>
+              )
+            ))}
+            {visibleStatusText && (
+              <div className="flex justify-start">
+                <div className="flex max-w-[80%] items-center gap-2 rounded-2xl bg-muted px-4 py-2.5 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>{visibleStatusText}</span>
                 </div>
               </div>
-            ))}
+            )}
             <div ref={chatEndRef} />
           </div>
         </div>
@@ -533,9 +574,21 @@ export default function AIWritingAssistant() {
                   setChatInput(e.target.value)
                   setCaretPosition(e.target.selectionStart ?? e.target.value.length)
                 }}
+                onCompositionStart={() => {
+                  isComposingRef.current = true
+                }}
+                onCompositionEnd={e => {
+                  isComposingRef.current = false
+                  setCaretPosition(e.currentTarget.selectionStart ?? e.currentTarget.value.length)
+                }}
                 onClick={e => setCaretPosition(e.currentTarget.selectionStart ?? chatInput.length)}
                 onKeyUp={e => setCaretPosition(e.currentTarget.selectionStart ?? chatInput.length)}
                 onKeyDown={e => {
+                  const nativeEvent = e.nativeEvent as KeyboardEvent & { isComposing?: boolean }
+                  if (isComposingRef.current || nativeEvent.isComposing || nativeEvent.keyCode === 229) {
+                    return
+                  }
+
                   if ((lookup || suggestions.length > 0) && e.key === 'ArrowDown') {
                     e.preventDefault()
                     setHighlightedIndex(prev => (
@@ -558,7 +611,6 @@ export default function AIWritingAssistant() {
                     if (nextLookup) {
                       setDismissedLookupKey(`${nextLookup.trigger}:${nextLookup.start}:${nextLookup.query}`)
                     }
-                    setLookup(null)
                     setSuggestions([])
                     return
                   }
@@ -590,7 +642,12 @@ export default function AIWritingAssistant() {
                   <Square className="h-4 w-4 fill-current" />
                 </Button>
               ) : (
-                <Button size="icon" className="shrink-0" onClick={() => void handleSendChat()} disabled={!chatInput.trim()}>
+                <Button
+                  size="icon"
+                  className="shrink-0"
+                  onClick={() => void handleSendChat()}
+                  disabled={!chatInput.trim() && selectedReferences.length === 0}
+                >
                   <Send className="h-4 w-4" />
                 </Button>
               )}
