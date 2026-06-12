@@ -81,26 +81,30 @@ export default function StoryListPage() {
               <Link key={story.id} to={getStageRoute(story.id, story.stage)} className="block">
                 <Card className="transition-shadow hover:shadow-md cursor-pointer shadow-sm">
                   <CardContent className="flex items-center justify-between p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
                         <BookOpen className="h-5 w-5 text-muted-foreground" />
                       </div>
-                      <div>
-                        <h3 className="font-medium">{story.title}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {story.stage === 'completed'
-                            ? `共 ${story.sectionCount} 节`
-                            : story.stage === 'writing'
-                              ? `${Math.round(story.currentWordCount / 1000)}k / ${story.targetWordCount ? Math.round(story.targetWordCount / 1000) + 'k' : '?'} 字`
-                              : stageLabels[story.stage].text}
+                      <div className="min-w-0">
+                        <h3 className="truncate font-medium">{story.title}</h3>
+                        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span className="truncate">
+                            {story.stage === 'completed'
+                              ? `共 ${story.sectionCount} 节`
+                              : story.stage === 'writing'
+                                ? `${Math.round(story.currentWordCount / 1000)}k / ${story.targetWordCount ? Math.round(story.targetWordCount / 1000) + 'k' : '?'} 字`
+                                : stageLabels[story.stage].text}
+                          </span>
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            {formatDate(story.updatedAt)}
+                          </span>
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${stageLabels[story.stage].color}`}>
+                      <span className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${stageLabels[story.stage].color}`}>
                         {stageLabels[story.stage].text}
                       </span>
-                      <span className="text-xs text-muted-foreground">{formatDate(story.updatedAt)}</span>
                       <button
                         type="button"
                         onClick={(e) => {

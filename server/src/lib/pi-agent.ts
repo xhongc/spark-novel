@@ -7,11 +7,13 @@ import {
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 
-// 项目级配置目录：server/.pi/agent/
-const PROJECT_AGENT_DIR = path.resolve(process.cwd(), ".pi", "agent");
+const WORKSPACE_CWD = path.resolve(process.cwd(), "workspace");
+// 项目级配置目录：server/workspace/.pi/agent/
+const PROJECT_AGENT_DIR = path.resolve(WORKSPACE_CWD, ".pi", "agent");
 
 // 确保目录存在
 fs.mkdirSync(PROJECT_AGENT_DIR, { recursive: true });
+fs.mkdirSync(WORKSPACE_CWD, { recursive: true });
 
 // 优先读环境变量，其次读项目级 auth.json
 const authStorage = AuthStorage.create(PROJECT_AGENT_DIR);
@@ -30,8 +32,9 @@ export class PiAgentService {
    */
   async complete(prompt: string, systemPrompt?: string): Promise<string> {
     const { session } = await createAgentSession({
+      cwd: WORKSPACE_CWD,
       agentDir: PROJECT_AGENT_DIR,
-      sessionManager: SessionManager.inMemory(),
+      sessionManager: SessionManager.inMemory(WORKSPACE_CWD),
       authStorage,
       modelRegistry,
     });
@@ -61,8 +64,9 @@ export class PiAgentService {
    */
   async *stream(prompt: string, systemPrompt?: string): AsyncGenerator<string> {
     const { session } = await createAgentSession({
+      cwd: WORKSPACE_CWD,
       agentDir: PROJECT_AGENT_DIR,
-      sessionManager: SessionManager.inMemory(),
+      sessionManager: SessionManager.inMemory(WORKSPACE_CWD),
       authStorage,
       modelRegistry,
     });
