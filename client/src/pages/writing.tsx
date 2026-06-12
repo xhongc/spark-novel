@@ -23,7 +23,7 @@ const statusConfig: Record<Section['status'], { icon: React.ReactNode; label: st
 export default function WritingPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { currentStory, sections, fetchStory, updateSectionStatus, isLoading } = useStoryStore()
+  const { currentStory, sections, fetchStory, updateSectionStatus, generateSection, isLoading } = useStoryStore()
   const {
     currentSectionIndex, isEditing, chatMode, isDrawerOpen, chatMessages,
     isGenerating, generatingSectionId,
@@ -59,13 +59,18 @@ export default function WritingPage() {
     }
   }, [totalSections, setSectionIndex])
 
-  const handleGenerate = () => {
-    if (!currentSection) return
+  const handleGenerate = async () => {
+    if (!currentSection || !id) return
     startGeneration(currentSection.id)
-    setTimeout(() => {
+    try {
+      await generateSection(id, currentSection.id, (_chunk) => {
+        // 可以在这里做实时文本追加预览（后续优化）
+      })
+    } catch {
+      // 错误处理
+    } finally {
       stopGeneration()
-      updateSectionStatus(currentSection.id, 'review')
-    }, 3000)
+    }
   }
 
   const handleSendChat = async () => {

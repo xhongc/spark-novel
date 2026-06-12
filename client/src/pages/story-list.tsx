@@ -3,9 +3,9 @@ import { useNavigate, Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useStoryStore } from '@/stores/story-store'
-import { useAuthStore } from '@/stores/auth-store'
-import { Plus, LogOut, BookOpen, Loader2 } from 'lucide-react'
+import { Plus, BookOpen, Loader2 } from 'lucide-react'
 import type { StoryStage } from '@/types'
+import BottomNav from '@/components/bottom-nav'
 
 const stageLabels: Record<StoryStage, { text: string; color: string }> = {
   setting: { text: '设定中', color: 'text-blue-600 bg-blue-50' },
@@ -16,17 +16,11 @@ const stageLabels: Record<StoryStage, { text: string; color: string }> = {
 
 export default function StoryListPage() {
   const { stories, isLoading, fetchStories } = useStoryStore()
-  const { user, logout } = useAuthStore()
   const navigate = useNavigate()
 
   useEffect(() => {
     fetchStories()
   }, [fetchStories])
-
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
 
   const getStageRoute = (storyId: string, stage: StoryStage) => {
     const routes: Record<StoryStage, string> = {
@@ -44,16 +38,10 @@ export default function StoryListPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-14">
       <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm">
-        <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-4">
+        <div className="mx-auto flex h-14 max-w-2xl items-center px-4">
           <h1 className="text-lg font-semibold">我的故事</h1>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">{user?.nickname}</span>
-            <Button variant="ghost" size="icon" onClick={handleLogout}>
-              <LogOut className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
       </header>
 
@@ -113,6 +101,7 @@ export default function StoryListPage() {
           </div>
         )}
       </main>
+      <BottomNav />
     </div>
   )
 }

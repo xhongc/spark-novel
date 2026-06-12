@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { User } from '@/types'
-import { mockApi } from '@/mocks/api'
+import { api } from '@/lib/api-client'
 
 interface AuthState {
   user: User | null
@@ -8,12 +8,12 @@ interface AuthState {
   isAuthenticated: boolean
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (email: string, password: string, nickname: string) => Promise<void>
+  register: (email: string, password: string, nickname: string, inviteCode: string) => Promise<void>
   logout: () => void
   initAuth: () => Promise<void>
 }
 
-export const useAuthStore = create<AuthState>((set, _get) => ({
+export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   accessToken: localStorage.getItem('accessToken'),
   isAuthenticated: !!localStorage.getItem('accessToken'),
@@ -22,26 +22,28 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
   login: async (email, password) => {
     set({ isLoading: true })
     try {
-      const result = await mockApi.auth.login(email, password)
-      localStorage.setItem('accessToken', result.accessToken)
-      localStorage.setItem('refreshToken', result.refreshToken)
-      set({ user: result.user, accessToken: result.accessToken, isAuthenticated: true, isLoading: false })
+      const { data } = await api.post('/auth/login', { email, password })
+      const { user, accessToken, refreshToken } = data.data
+      localStorage.setItem('accessToken', accessToken)
+      localStorage.setItem('refreshToken', refreshToken)
+      set({ user, accessToken, isAuthenticated: true, isLoading: false })
     } catch {
       set({ isLoading: false })
       throw new Error('登录失败')
     }
   },
 
-  register: async (email, password, nickname) => {
+  register: async (email, password, nickname, inviteCode) => {
     set({ isLoading: true })
     try {
-      const result = await mockApi.auth.register(email, password, nickname)
-      localStorage.setItem('accessToken', result.accessToken)
-      localStorage.setItem('refreshToken', result.refreshToken)
-      set({ user: result.user, accessToken: result.accessToken, isAuthenticated: true, isLoading: false })
-    } catch {
+      const { data } = await api.post('/auth/register', { email, password, nickname, inviteCode })
+      const { user, accessToken, refreshToken } = data.data
+      localStorage.setItem('accessToken', accessToken)
+      localStorage.setItem('refreshToken', refreshToken)
+      set({ user, accessToken, isAuthenticated: true, isLoading: false })
+    } catch (err) {
       set({ isLoading: false })
-      throw new Error('注册失败')
+      throw err
     }
   },
 
@@ -55,8 +57,8 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
     const token = localStorage.getItem('accessToken')
     if (!token) return
     try {
-      const user = await mockApi.auth.getMe()
-      set({ user, isAuthenticated: true, accessToken: token })
+      const { data } = await api.get('/auth/me')
+      set({ user: data.data, isAuthenticated: true, accessToken: token })
     } catch {
       localStorage.removeItem('accessToken')
       localStorage.removeItem('refreshToken')

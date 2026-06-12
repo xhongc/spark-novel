@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [nickname, setNickname] = useState('')
+  const [inviteCode, setInviteCode] = useState('')
   const [error, setError] = useState('')
   const { login, register, isLoading } = useAuthStore()
   const navigate = useNavigate()
@@ -21,13 +22,13 @@ export default function LoginPage() {
     setError('')
     try {
       if (isRegister) {
-        await register(email, password, nickname)
+        await register(email, password, nickname, inviteCode)
       } else {
         await login(email, password)
       }
-      navigate('/stories')
-    } catch {
-      setError(isRegister ? '注册失败，请重试' : '登录失败，请检查邮箱和密码')
+      navigate('/materials')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : (isRegister ? '注册失败，请重试' : '登录失败，请检查邮箱和密码'))
     }
   }
 
@@ -44,16 +45,28 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {isRegister && (
-              <div className="space-y-2">
-                <Label htmlFor="nickname">昵称</Label>
-                <Input
-                  id="nickname"
-                  placeholder="你的笔名"
-                  value={nickname}
-                  onChange={e => setNickname(e.target.value)}
-                  required
-                />
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="nickname">昵称</Label>
+                  <Input
+                    id="nickname"
+                    placeholder="你的笔名"
+                    value={nickname}
+                    onChange={e => setNickname(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="inviteCode">邀请码</Label>
+                  <Input
+                    id="inviteCode"
+                    placeholder="请输入邀请码"
+                    value={inviteCode}
+                    onChange={e => setInviteCode(e.target.value)}
+                    required
+                  />
+                </div>
+              </>
             )}
             <div className="space-y-2">
               <Label htmlFor="email">邮箱地址</Label>

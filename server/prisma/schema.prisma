@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  nickname     String
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  stories Story[]
+
+  @@map("users")
+}
+
+model Story {
+  id               String   @id @default(cuid())
+  userId           String
+  title            String
+  premise          String
+  stage            String   @default("setting")
+  setting          String?
+  genre            String?
+  targetWordCount  Int?
+  currentWordCount Int      @default(0)
+  isDeleted        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id])
+  sections Section[]
+
+  @@index([userId])
+  @@index([stage])
+  @@map("stories")
+}
+
+model Section {
+  id               String   @id @default(cuid())
+  storyId          String
+  title            String
+  summary          String?
+  content          String?
+  wordCount        Int      @default(0)
+  targetWordCount  Int?
+  sortOrder        Int
+  status           String   @default("locked")
+  aiModel          String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  story Story @relation(fields: [storyId], references: [id])
+
+  @@index([storyId])
+  @@index([storyId, sortOrder])
+  @@map("sections")
+}

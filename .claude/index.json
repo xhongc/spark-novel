@@ -1,0 +1,164 @@
+{
+  "version": "1.0.0",
+  "lastScan": "2026-06-12T12:36:27Z",
+  "project": {
+    "name": "spark",
+    "description": "AI 短篇写作助手 -- 移动端优先的创意写作 Web 应用",
+    "language": "TypeScript",
+    "framework": "React 19 + Vite 7",
+    "uiLibrary": "Tailwind CSS v4 + shadcn/ui"
+  },
+  "modules": [
+    {
+      "name": "client",
+      "path": "client",
+      "description": "前端 Web 应用（React SPA）",
+      "isActive": true,
+      "entry": "client/src/main.tsx",
+      "routes": [
+        "/login",
+        "/materials",
+        "/stories",
+        "/stories/new",
+        "/stories/:id/settings",
+        "/stories/:id/outline",
+        "/stories/:id/write",
+        "/settings"
+      ],
+      "stores": [
+        "client/src/stores/auth-store.ts",
+        "client/src/stores/materials-store.ts",
+        "client/src/stores/story-store.ts",
+        "client/src/stores/writing-store.ts"
+      ],
+      "pages": [
+        "client/src/pages/login.tsx",
+        "client/src/pages/materials.tsx",
+        "client/src/pages/create-story.tsx",
+        "client/src/pages/setting.tsx",
+        "client/src/pages/outline.tsx",
+        "client/src/pages/writing.tsx",
+        "client/src/pages/story-list.tsx",
+        "client/src/pages/settings.tsx"
+      ],
+      "components": [
+        "client/src/components/bottom-nav.tsx",
+        "client/src/components/chat-panel.tsx",
+        "client/src/components/mobile-frame.tsx"
+      ],
+      "uiComponents": [
+        "client/src/components/ui/avatar.tsx",
+        "client/src/components/ui/badge.tsx",
+        "client/src/components/ui/button.tsx",
+        "client/src/components/ui/card.tsx",
+        "client/src/components/ui/collapsible.tsx",
+        "client/src/components/ui/dialog.tsx",
+        "client/src/components/ui/dropdown-menu.tsx",
+        "client/src/components/ui/input.tsx",
+        "client/src/components/ui/label.tsx",
+        "client/src/components/ui/navigation-menu.tsx",
+        "client/src/components/ui/popover.tsx",
+        "client/src/components/ui/scroll-area.tsx",
+        "client/src/components/ui/select.tsx",
+        "client/src/components/ui/separator.tsx",
+        "client/src/components/ui/skeleton.tsx",
+        "client/src/components/ui/switch.tsx",
+        "client/src/components/ui/tabs.tsx",
+        "client/src/components/ui/textarea.tsx",
+        "client/src/components/ui/toggle-group.tsx",
+        "client/src/components/ui/toggle.tsx",
+        "client/src/components/ui/tooltip.tsx"
+      ],
+      "mockFiles": [
+        "client/src/mocks/api.ts",
+        "client/src/mocks/data.ts"
+      ],
+      "types": ["client/src/types/index.ts"],
+      "configFiles": [
+        "client/package.json",
+        "client/vite.config.ts",
+        "client/tsconfig.json",
+        "client/tsconfig.app.json",
+        "client/tsconfig.node.json",
+        "client/eslint.config.js",
+        "client/components.json",
+        "client/index.html"
+      ],
+      "hasTests": false,
+      "hasBackend": false,
+      "gaps": [
+        "缺少测试框架和测试文件",
+        "缺少 CI/CD 配置",
+        "数据层为 Mock，无真实后端集成",
+        "缺少 PWA 配置",
+        "缺少环境变量配置(.env)"
+      ]
+    },
+    {
+      "name": "electron",
+      "path": "electron",
+      "description": "预留的 Electron 桌面应用目录",
+      "isActive": false,
+      "gaps": ["目录为空，仅有 .gitkeep"]
+    },
+    {
+      "name": "packages",
+      "path": "packages",
+      "description": "预留的共享包目录",
+      "isActive": false,
+      "gaps": ["目录为空，仅有 .gitkeep"]
+    }
+  ],
+  "coverage": {
+    "estimatedTotalFiles": 47,
+    "scannedFiles": 47,
+    "coveragePercent": 100,
+    "activeModules": 1,
+    "totalModules": 3,
+    "moduleCoveragePercent": 33.3,
+    "skipped": {
+      "node_modules": { "reason": "依赖目录，按忽略规则跳过" },
+      ".git": { "reason": "版本控制目录，按忽略规则跳过" }
+    },
+    "truncated": false
+  },
+  "gaps": [
+    {
+      "module": "client",
+      "type": "testing",
+      "description": "未配置任何测试框架（vitest/jest），无测试文件",
+      "priority": "high"
+    },
+    {
+      "module": "client",
+      "type": "backend",
+      "description": "全部 API 为 Mock 实现，无真实后端",
+      "priority": "high"
+    },
+    {
+      "module": "client",
+      "type": "ci-cd",
+      "description": "无 CI/CD 配置",
+      "priority": "medium"
+    },
+    {
+      "module": "electron",
+      "type": "implementation",
+      "description": "Electron 目录为空，桌面端未开始开发",
+      "priority": "low"
+    },
+    {
+      "module": "packages",
+      "type": "implementation",
+      "description": "共享包目录为空",
+      "priority": "low"
+    }
+  ],
+  "nextSteps": [
+    "为 client 模块添加 vitest + @testing-library/react 测试框架",
+    "对核心 Store (auth-store, story-store) 编写单元测试",
+    "对接真实后端 API，替换 mocks/api.ts 中的 Mock 实现",
+    "添加 .env 文件管理环境变量（API base URL 等）",
+    "评估是否需要 PWA 支持（Service Worker + 离线缓存）"
+  ]
+}

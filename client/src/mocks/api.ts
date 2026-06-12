@@ -16,8 +16,12 @@ export const mockApi = {
         refreshToken: 'mock-refresh-token',
       }
     },
-    async register(email: string, _password: string, nickname: string): Promise<{ user: User; accessToken: string; refreshToken: string }> {
+    async register(email: string, _password: string, nickname: string, inviteCode: string): Promise<{ user: User; accessToken: string; refreshToken: string }> {
       await delay(API_DELAY)
+      const validCode = import.meta.env.VITE_INVITE_CODE
+      if (inviteCode !== validCode) {
+        throw new Error('邀请码无效')
+      }
       return {
         user: { id: 'user-1', email, nickname, createdAt: new Date().toISOString() },
         accessToken: 'mock-access-token',
