@@ -93,7 +93,6 @@ export const useWritingStore = create<WritingState>((set, get) => ({
       createdAt: new Date().toISOString(),
       type: 'text',
     }
-    const history = [...get().chatMessages, userMsg]
 
     activeChatAbortController?.abort()
     activeChatAbortController = abortController
@@ -109,10 +108,7 @@ export const useWritingStore = create<WritingState>((set, get) => ({
 
     try {
       await streamGenerate('/api/v1/assistant/chat', {
-        messages: history.map(({ role, content: messageContent }) => ({
-          role,
-          content: messageContent,
-        })),
+        content,
         ...context,
       }, {
         onChunk: (text) => {

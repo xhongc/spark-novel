@@ -376,7 +376,13 @@ export default function AIWritingAssistant() {
     }
   }
 
-  const handleClearChat = () => {
+  const handleClearChat = async () => {
+    try {
+      await api.delete('/assistant/chat/session')
+    } catch {
+      // Local cleanup should still happen even if session reset fails.
+    }
+
     setPendingStatusText(null)
     setChatStatusText(null)
     clearChatMessages()
@@ -415,7 +421,7 @@ export default function AIWritingAssistant() {
               variant="ghost"
               size="icon"
               className="h-7 w-7"
-              onClick={handleClearChat}
+              onClick={() => void handleClearChat()}
               title="清空会话"
               aria-label="清空会话"
             >

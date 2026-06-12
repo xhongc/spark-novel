@@ -4,11 +4,6 @@ import { piAgent } from "../lib/pi-agent.js";
 import { authGuard } from "../plugins/auth.js";
 import { closeSSE, initSSE, sendSSE } from "../lib/sse.js";
 
-const chatMessageSchema = z.object({
-  role: z.enum(["user", "assistant"]),
-  content: z.string(),
-});
-
 const referencedDocumentSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -16,7 +11,7 @@ const referencedDocumentSchema = z.object({
 });
 
 const assistantChatSchema = z.object({
-  messages: z.array(chatMessageSchema).min(1),
+  content: z.string().min(1),
   currentPath: z.string().optional(),
   currentStoryTitle: z.string().optional(),
   currentSectionTitle: z.string().optional(),
@@ -50,39 +45,35 @@ function buildPrompt(input: z.infer<typeof assistantChatSchema>): string {
     formatReferencedDocuments("已调用技能", input.referencedSkills),
   ].filter(Boolean);
 
-  const transcript = input.messages
-    .map((message) => `${message.role === "user" ? "用户" : "助手"}：${message.content}`)
-    .join("\n\n");
+  return `${contextBlocks.length > 0 ? `当前上下文：\n${contextBlocks.join("\n\n")}\n\n` : ""}用户本轮请求：
+${input.content}
 
-  return `你是一名中文小说写作助手。你的职责是帮助用户进行小说创作、润色、改写、扩写、缩写、人物塑造、情节推进和文本分析。
-
-要求：
-- 默认使用简体中文回复。
-- 结合上下文，给出直接可用的写作建议或改写结果。
-- 如果用户是在要求修改文本，优先给出改写后的具体内容，而不是空泛说明。
-- 不要编造你没有看到的设定；如果上下文不足，明确指出缺失信息并在现有信息上尽量帮用户推进。
-- 如果提供了“已调用技能”或“已引用素材”，优先基于这些内容完成任务。
-- 回复保持清晰、自然、聚焦写作任务，避免冗长寒暄。
-
-${contextBlocks.length > 0 ? `当前上下文：\n${contextBlocks.join("\n\n")}\n\n` : ""}以下是本轮对话历史：
-
-${transcript}
-
-请继续回复最后一条用户消息。`;
+请结合已有会话历史与本轮上下文继续回复。`;
 }
 
 export async function assistantRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook("onRequest", authGuard);
 
+  fastify.delete("/assistant/chat/session", async (req, reply) => {
+    piAgent.resetChatSession(req.user.userId);
+    return reply.send({
+      success: true,
+      data: null,
+    });
+  });
+
   fastify.post("/assistant/chat", async (req, reply) => {
     const payload = assistantChatSchema.parse(req.body);
     const prompt = buildPrompt(payload);
+
+    req.log.info({ payload }, "[assistant] chat payload");
+    req.log.info(`\n[assistant] prompt begin\n${prompt}\n[assistant] prompt end`);
 
     initSSE(reply);
     sendSSE(reply, "progress", { type: "start" });
 
     try {
-      for await (const chunk of piAgent.stream(prompt)) {
+      for await (const chunk of piAgent.streamChat(req.user.userId, prompt)) {
         sendSSE(reply, "chunk", { type: "content", text: chunk });
       }
 
