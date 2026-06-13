@@ -3,6 +3,7 @@ export interface SSECallbacks {
   onDone?: (data: Record<string, unknown>) => void;
   onError?: (message: string) => void;
   onStart?: (data: Record<string, unknown>) => void;
+  onProgress?: (data: Record<string, unknown>) => void;
 }
 
 export interface SSEOptions {
@@ -53,6 +54,7 @@ export async function streamGenerate(
         const data = JSON.parse(line.slice(6));
         switch (eventType) {
           case "progress":
+            callbacks.onProgress?.(data);
             callbacks.onStart?.(data);
             break;
           case "chunk":

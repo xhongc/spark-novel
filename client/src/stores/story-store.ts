@@ -17,6 +17,8 @@ function normalizeSection(section: Section): Section {
   return {
     ...section,
     status: section.status === 'locked' ? 'review' : section.status,
+    sortOrder: typeof section.sortOrder === 'number' ? section.sortOrder : 0,
+    wordCount: typeof section.wordCount === 'number' ? section.wordCount : 0,
   }
 }
 
@@ -28,7 +30,7 @@ interface StoryState {
 
   fetchStories: () => Promise<void>
   fetchStory: (id: string) => Promise<void>
-  createStory: (premise: string, genre?: string) => Promise<Story>
+  createStory: (title: string, premise: string, genre?: string) => Promise<Story>
   renameStory: (storyId: string, newTitle: string) => Promise<string>
   updateSetting: (storyId: string, setting: string) => Promise<void>
   generateSetting: (storyId: string, onChunk?: (text: string) => void) => Promise<string>
@@ -75,8 +77,7 @@ export const useStoryStore = create<StoryState>((set, get) => ({
     }
   },
 
-  createStory: async (premise: string, genre?: string) => {
-    const title = premise.slice(0, 20)
+  createStory: async (title: string, premise: string, genre?: string) => {
     const { data } = await api.post('/stories', {
       title,
       premise,

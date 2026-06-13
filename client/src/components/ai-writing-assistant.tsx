@@ -5,8 +5,10 @@ import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api-client'
 import { useMaterialsStore } from '@/stores/materials-store'
 import { useStoryStore } from '@/stores/story-store'
+import { useStoryWorkspaceStore } from '@/stores/story-workspace-store'
 import { useWritingStore } from '@/stores/writing-store'
-import type { ChatMessage, ChatReference, Material, Skill } from '@/types'
+import { streamGenerate } from '@/lib/sse-client'
+import type { ChatMessage, ChatReference, Material, Skill, StoryWorkspaceItem } from '@/types'
 import {
   AtSign,
   FileText,
@@ -106,6 +108,7 @@ export default function AIWritingAssistant() {
 
   const { currentStory, sections } = useStoryStore()
   const { currentMaterial } = useMaterialsStore()
+  const { currentFile: currentStoryFile } = useStoryWorkspaceStore()
   const {
     chatMode,
     chatMessages,
@@ -133,6 +136,7 @@ export default function AIWritingAssistant() {
 
   const isWritingRoute = /^\/stories\/[^/]+$/.test(location.pathname)
   const isMaterialsRoute = location.pathname === '/materials'
+  const isStoryWorkspaceRoute = /^\/stories\/[^/]+\/(setting|outline)$/.test(location.pathname)
   const currentSection = sections[currentSectionIndex]
   const visibleStatusText = pendingStatusText || chatStatusText
 
@@ -160,8 +164,19 @@ export default function AIWritingAssistant() {
       }
     }
 
+    if (isStoryWorkspaceRoute && currentStoryFile?.type === 'file') {
+      return {
+        id: `story-file:${currentStoryFile.id}`,
+        name: currentStoryFile.name,
+        kind: 'material' as const,
+        itemType: 'virtual' as const,
+        content: currentStoryFile.content || '',
+        isCurrentPage: true,
+      }
+    }
+
     return null
-  }, [currentMaterial, currentSection, isMaterialsRoute, isWritingRoute])
+  }, [currentMaterial, currentSection, currentStoryFile, isMaterialsRoute, isStoryWorkspaceRoute, isWritingRoute])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -252,6 +267,40 @@ export default function AIWritingAssistant() {
           return
         }
 
+        if (isStoryWorkspaceRoute && currentStory?.id) {
+          const { data } = await api.get(`/stories/${encodeURIComponent(currentStory.id)}/workspace/search`, {
+            params: {
+              q: lookup.query,
+              limit: 8,
+            },
+          })
+
+          if (cancelled) return
+
+          const nextSuggestions = (data.data as StoryWorkspaceItem[])
+            .filter(item => item.type === 'file')
+            .map(item => ({
+              id: item.id,
+              name: item.name,
+              kind: 'material' as const,
+              itemType: 'file' as const,
+              parentId: item.parentId,
+              description: item.parentId || '故事文件',
+            }))
+
+          const filteredCurrentPageMaterial = currentPageMaterial && matchesQuery(currentPageMaterial.name, lookup.query)
+            ? currentPageMaterial
+            : null
+
+          const otherFiles = nextSuggestions
+            .filter(item => item.id !== filteredCurrentPageMaterial?.id.replace(/^story-file:/, ''))
+            .slice(0, 4)
+
+          setSuggestions(filteredCurrentPageMaterial ? [filteredCurrentPageMaterial, ...otherFiles] : otherFiles)
+          setHighlightedIndex(0)
+          return
+        }
+
         const { data } = await api.get('/materials/search', {
           params: {
             q: lookup.query,
@@ -301,7 +350,7 @@ export default function AIWritingAssistant() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [lookup, currentPageMaterial])
+  }, [lookup, currentPageMaterial, currentStory?.id, isStoryWorkspaceRoute])
 
   const handleSelectSuggestion = (suggestion: AssistantSuggestion) => {
     setDismissedLookupKey(null)
@@ -335,6 +384,18 @@ export default function AIWritingAssistant() {
           : null
       }
 
+      if (isStoryWorkspaceRoute && currentStory?.id) {
+        const { data } = await api.get(`/stories/${encodeURIComponent(currentStory.id)}/workspace/file`, {
+          params: { path: reference.id },
+        })
+
+        return {
+          id: reference.id,
+          name: reference.name,
+          content: data.data.content,
+        }
+      }
+
       const { data } = await api.get('/materials/file', {
         params: { path: reference.id },
       })
@@ -357,6 +418,107 @@ export default function AIWritingAssistant() {
       id: reference.id,
       name: reference.name,
       content: data.data.content,
+    }
+  }
+
+  const handleSendStoryWorkspaceChat = async (
+    content: string,
+    referencedMaterials: ChatReference[],
+  ) => {
+    const storyId = currentStory?.id
+    if (!storyId || useWritingStore.getState().isChatSending) return
+
+    const timestamp = Date.now()
+    const userMsg: ChatMessage = {
+      id: `msg-user-${timestamp}`,
+      role: 'user',
+      content,
+      createdAt: new Date().toISOString(),
+      type: 'text',
+    }
+    const assistantMsg: ChatMessage = {
+      id: `msg-assistant-${timestamp}`,
+      role: 'assistant',
+      content: '',
+      createdAt: new Date().toISOString(),
+      type: 'text',
+    }
+
+    useWritingStore.setState(state => ({
+      chatMessages: [...state.chatMessages, userMsg, assistantMsg],
+      chatStatusText: '思考中...',
+      isChatSending: true,
+    }))
+
+    let hasResponse = false
+
+    try {
+      await streamGenerate(`/api/v1/stories/${encodeURIComponent(storyId)}/agent/chat`, {
+        content,
+        currentPath: location.pathname,
+        currentFile: currentStoryFile?.type === 'file'
+          ? {
+            id: currentStoryFile.id,
+            name: currentStoryFile.name,
+            content: currentStoryFile.content || '',
+          }
+          : undefined,
+        selectedText: selectedText || undefined,
+        referencedFiles: referencedMaterials.length > 0 ? referencedMaterials : undefined,
+      }, {
+        onProgress: (data) => {
+          const nextStatus = typeof data.text === 'string'
+            ? data.text
+            : data.type === 'start'
+              ? '思考中...'
+              : null
+          if (!nextStatus) return
+          useWritingStore.setState({ chatStatusText: nextStatus })
+        },
+        onChunk: (text) => {
+          hasResponse = true
+          useWritingStore.setState(state => ({
+            chatStatusText: null,
+            chatMessages: state.chatMessages.map(message => (
+              message.id === assistantMsg.id
+                ? { ...message, content: message.content + text }
+                : message
+            )),
+          }))
+        },
+        onError: (errorMessage) => {
+          useWritingStore.setState(state => ({
+            chatStatusText: null,
+            chatMessages: state.chatMessages.map(chatMessage => (
+              chatMessage.id === assistantMsg.id
+                ? { ...chatMessage, content: errorMessage || 'AI 回复失败，请稍后重试。' }
+                : chatMessage
+            )),
+            isChatSending: false,
+          }))
+        },
+        onDone: () => {
+          useWritingStore.setState(state => ({
+            chatStatusText: null,
+            chatMessages: state.chatMessages.map(message => (
+              message.id === assistantMsg.id && !hasResponse
+                ? { ...message, content: 'AI 暂时没有返回内容，请重试。' }
+                : message
+            )),
+            isChatSending: false,
+          }))
+        },
+      })
+    } catch {
+      useWritingStore.setState(state => ({
+        chatStatusText: null,
+        chatMessages: state.chatMessages.map(message => (
+          message.id === assistantMsg.id
+            ? { ...message, content: 'AI 回复失败，请稍后重试。' }
+            : message
+        )),
+        isChatSending: false,
+      }))
     }
   }
 
@@ -395,15 +557,19 @@ export default function AIWritingAssistant() {
     if (!content && !hasResolvedReferences) return
 
     try {
-      await sendMessage(nextContent, {
-        currentPath: location.pathname,
-        currentStoryTitle: currentStory?.title,
-        currentSectionTitle: isWritingRoute ? currentSection?.title : undefined,
-        currentSectionContent: isWritingRoute ? currentSection?.content : undefined,
-        selectedText: selectedText || undefined,
-        referencedMaterials: referencedMaterials.length > 0 ? referencedMaterials : undefined,
-        referencedSkills: referencedSkills.length > 0 ? referencedSkills : undefined,
-      })
+      if (isStoryWorkspaceRoute) {
+        await handleSendStoryWorkspaceChat(nextContent, referencedMaterials)
+      } else {
+        await sendMessage(nextContent, {
+          currentPath: location.pathname,
+          currentStoryTitle: currentStory?.title,
+          currentSectionTitle: isWritingRoute ? currentSection?.title : undefined,
+          currentSectionContent: isWritingRoute ? currentSection?.content : undefined,
+          selectedText: selectedText || undefined,
+          referencedMaterials: referencedMaterials.length > 0 ? referencedMaterials : undefined,
+          referencedSkills: referencedSkills.length > 0 ? referencedSkills : undefined,
+        })
+      }
 
       setChatInput('')
       setCaretPosition(0)

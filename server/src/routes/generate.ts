@@ -5,25 +5,18 @@ import { z } from "zod";
 import { piAgent } from "../lib/pi-agent.js";
 import { initSSE, sendSSE, closeSSE } from "../lib/sse.js";
 import { authGuard } from "../plugins/auth.js";
-
-const WORKSPACE_ROOT = path.resolve(process.cwd(), "workspace", "novel");
-
-function safePath(relativePath: string): string {
-  const resolved = path.resolve(WORKSPACE_ROOT, relativePath);
-  if (!resolved.startsWith(WORKSPACE_ROOT)) {
-    throw new Error("非法路径");
-  }
-  return resolved;
-}
-
-async function readMeta(dir: string): Promise<Record<string, unknown>> {
-  const content = await fs.readFile(path.join(dir, "meta.md"), "utf-8");
-  return JSON.parse(content);
-}
-
-async function writeMeta(dir: string, data: Record<string, unknown>): Promise<void> {
-  await fs.writeFile(path.join(dir, "meta.md"), JSON.stringify(data, null, 2), "utf-8");
-}
+import {
+  ensureStoryDirectories,
+  parseChapterMarkdown,
+  readOptionalFile,
+  readStoryMeta,
+  safeStoryPath,
+  sanitizeFileName,
+  scanStorySections,
+  serializeChapterFile,
+  storyExists,
+  writeStoryMeta,
+} from "../lib/story-workspace.js";
 
 interface ParsedOutlineSection {
   title: string;
@@ -126,17 +119,20 @@ const generateSectionSchema = z.object({
 export async function generateRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook("onRequest", authGuard);
 
-  // 生成设定（SSE 流式）
   fastify.post("/generate/setting", async (req, reply) => {
     const { storyId } = generateSettingSchema.parse(req.body);
-    const dir = safePath(storyId);
+    if (!await storyExists(storyId)) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: "NOT_FOUND", message: "故事不存在或缺少想法文件" },
+      });
+    }
 
-    let meta: Record<string, unknown>;
-    let premise: string;
-    try {
-      meta = await readMeta(dir);
-      premise = await fs.readFile(path.join(dir, "想法.md"), "utf-8");
-    } catch {
+    await ensureStoryDirectories(storyId);
+
+    const meta = await readStoryMeta(storyId);
+    const premise = await readOptionalFile(storyId, "想法.md");
+    if (!premise) {
       return reply.status(404).send({
         success: false,
         error: { code: "NOT_FOUND", message: "故事不存在或缺少想法文件" },
@@ -144,7 +140,6 @@ export async function generateRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     const genre = meta.genre || "";
-
     const prompt = `你是一位专业的小说策划师。请根据以下故事创意生成详细的故事设定。
 
 故事创意：${premise}
@@ -170,41 +165,42 @@ ${genre ? `类型：${genre}` : ""}
         sendSSE(reply, "chunk", { type: "content", text: chunk });
       }
 
-      // 写入设定文件（直接保存 Markdown 原文）
-      await fs.writeFile(path.join(dir, "设定.md"), fullText, "utf-8");
+      await fs.writeFile(safeStoryPath(storyId, path.join("设定", "总设定.md")), fullText, "utf-8");
+      await fs.writeFile(safeStoryPath(storyId, "设定.md"), fullText, "utf-8");
 
-      // 更新 meta
       meta.stage = "outline";
       meta.updatedAt = new Date().toISOString();
-      await writeMeta(dir, meta);
+      await writeStoryMeta(storyId, meta);
 
       sendSSE(reply, "done", { type: "complete", data: fullText });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "生成失败";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "生成失败";
       sendSSE(reply, "error", { type: "error", message });
     } finally {
       closeSSE(reply);
     }
   });
 
-  // 生成大纲（SSE 流式，Markdown 格式）
   fastify.post("/generate/outline", async (req, reply) => {
     const { storyId } = generateOutlineSchema.parse(req.body);
-    const dir = safePath(storyId);
-
-    let meta: Record<string, unknown>;
-    let settingContent: string;
-    try {
-      meta = await readMeta(dir);
-      settingContent = await fs.readFile(path.join(dir, "设定.md"), "utf-8");
-    } catch {
+    if (!await storyExists(storyId)) {
       return reply.status(400).send({
         success: false,
         error: { code: "BAD_REQUEST", message: "请先生成并确认故事设定" },
       });
     }
 
-    const targetWords = (meta.targetWordCount as number) || 5000;
+    const meta = await readStoryMeta(storyId);
+    const settingContent = await readOptionalFile(storyId, path.join("设定", "总设定.md"))
+      || await readOptionalFile(storyId, "设定.md");
+    if (!settingContent) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: "BAD_REQUEST", message: "请先生成并确认故事设定" },
+      });
+    }
+
+    const targetWords = meta.targetWordCount || 5000;
     const sectionCount = Math.max(3, Math.round(targetWords / 1500));
 
     const prompt = `你是一位专业的小说策划师。请根据以下故事设定生成分章大纲。
@@ -237,42 +233,36 @@ ${settingContent}
         sendSSE(reply, "chunk", { type: "content", text: chunk });
       }
 
-      // 保存大纲文件（Markdown 原文）
-      await fs.writeFile(path.join(dir, "大纲.md"), fullText, "utf-8");
-
+      await fs.writeFile(safeStoryPath(storyId, path.join("大纲", "总纲.md")), fullText, "utf-8");
+      await fs.writeFile(safeStoryPath(storyId, "大纲.md"), fullText, "utf-8");
       sendSSE(reply, "done", { type: "complete", data: fullText });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "生成失败";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "生成失败";
       sendSSE(reply, "error", { type: "error", message });
     } finally {
       closeSSE(reply);
     }
   });
 
-  // 确认大纲：解析 Markdown → 创建小节大纲文件 → 进入写作阶段
   fastify.post("/generate/outline/confirm", async (req, reply) => {
     const { storyId, text } = z.object({
       storyId: z.string(),
       text: z.string().min(1),
     }).parse(req.body);
 
-    const dir = safePath(storyId);
-
-    let meta: Record<string, unknown>;
-    try {
-      meta = await readMeta(dir);
-    } catch {
+    if (!await storyExists(storyId)) {
       return reply.status(404).send({
         success: false,
         error: { code: "NOT_FOUND", message: "故事不存在" },
       });
     }
 
-    // 保存确认后的大纲
-    await fs.writeFile(path.join(dir, "大纲.md"), text, "utf-8");
+    await ensureStoryDirectories(storyId);
+    const meta = await readStoryMeta(storyId);
+    await fs.writeFile(safeStoryPath(storyId, path.join("大纲", "总纲.md")), text, "utf-8");
+    await fs.writeFile(safeStoryPath(storyId, "大纲.md"), text, "utf-8");
 
     const sections = parseOutlineSections(text);
-
     if (sections.length === 0) {
       return reply.status(400).send({
         success: false,
@@ -280,98 +270,62 @@ ${settingContent}
       });
     }
 
-    // 清空并重建小节大纲目录
-    const outlineDir = path.join(dir, "小节大纲");
-    await fs.rm(outlineDir, { recursive: true, force: true });
-    await fs.mkdir(outlineDir, { recursive: true });
+    const chapterDir = safeStoryPath(storyId, path.join("大纲", "章节"));
+    await fs.rm(chapterDir, { recursive: true, force: true });
+    await fs.mkdir(chapterDir, { recursive: true });
 
     for (let i = 0; i < sections.length; i++) {
-      const sec = sections[i];
+      const section = sections[i];
       const num = String(i + 1).padStart(2, "0");
-      const fileName = `${num}-${sec.title}.md`;
-      const fileData = {
-        title: sec.title,
-        summary: sec.summary,
-        targetWordCount: sec.targetWordCount,
-        status: "review",
-      };
-      await fs.writeFile(path.join(outlineDir, fileName), JSON.stringify(fileData, null, 2), "utf-8");
+      const title = sanitizeFileName(section.title) || `第${i + 1}章`;
+      const fileName = `${num}-${title}.md`;
+      const content = serializeChapterFile({
+        index: i + 1,
+        title,
+        summary: section.summary,
+        targetWordCount: section.targetWordCount,
+      });
+      await fs.writeFile(path.join(chapterDir, fileName), content, "utf-8");
     }
 
-    // 创建正文目录
-    await fs.mkdir(path.join(dir, "正文"), { recursive: true });
-
-    // 更新 meta
+    await fs.mkdir(safeStoryPath(storyId, "正文"), { recursive: true });
     meta.stage = "writing";
     meta.updatedAt = new Date().toISOString();
-    await writeMeta(dir, meta);
+    await writeStoryMeta(storyId, meta);
 
     return { success: true, data: { sectionCount: sections.length } };
   });
 
-  // 生成章节正文（SSE 流式）
   fastify.post("/generate/section", async (req, reply) => {
     const { storyId, sectionId } = generateSectionSchema.parse(req.body);
-    const dir = safePath(storyId);
-
-    let meta: Record<string, unknown>;
-    try {
-      meta = await readMeta(dir);
-    } catch {
+    if (!await storyExists(storyId)) {
       return reply.status(404).send({
         success: false,
         error: { code: "NOT_FOUND", message: "故事不存在" },
       });
     }
 
-    // 读取大纲文件
-    const outlinePath = path.join(dir, "小节大纲", sectionId);
-    let outlineData: { title: string; summary: string; targetWordCount: number; status: string };
-    try {
-      outlineData = JSON.parse(await fs.readFile(outlinePath, "utf-8"));
-    } catch {
+    const meta = await readStoryMeta(storyId);
+    const sectionOutline = await readOptionalFile(storyId, path.join("大纲", "章节", sectionId));
+    if (!sectionOutline) {
       return reply.status(404).send({
         success: false,
         error: { code: "NOT_FOUND", message: "大纲章节不存在" },
       });
     }
 
-    // 读取设定
-    let settingContent: string | null = null;
-    try {
-      settingContent = await fs.readFile(path.join(dir, "设定.md"), "utf-8");
-    } catch { /* 无设定 */ }
+    const outlineData = parseChapterMarkdown(sectionOutline, sectionId);
+    const settingContent = await readOptionalFile(storyId, path.join("设定", "总设定.md"))
+      || await readOptionalFile(storyId, "设定.md");
 
-    // 读取前序正文作为上下文
-    const outlineDir = path.join(dir, "小节大纲");
-    const contentDir = path.join(dir, "正文");
-    const match = sectionId.match(/^(\d+)-/);
-    const currentNum = match ? parseInt(match[1], 10) : 0;
+    const sections = await scanStorySections(storyId);
+    const currentSection = sections.find((section) => section.id === sectionId);
+    const contextSummary = sections
+      .filter((section) => section.sortOrder < (currentSection?.sortOrder || 0))
+      .map((section) => `【${section.title}】${section.summary || section.content?.slice(0, 200) || ""}`)
+      .join("\n");
 
-    const contextSummaryParts: string[] = [];
-    try {
-      const outlineFiles = await fs.readdir(outlineDir);
-      for (const file of outlineFiles.sort()) {
-        const fileMatch = file.match(/^(\d+)-/);
-        if (!fileMatch) continue;
-        const fileNum = parseInt(fileMatch[1], 10);
-        if (fileNum >= currentNum) break;
-
-        try {
-          const oData = JSON.parse(await fs.readFile(path.join(outlineDir, file), "utf-8"));
-          let contentPreview = "";
-          try {
-            const content = await fs.readFile(path.join(contentDir, file), "utf-8");
-            contentPreview = content.slice(0, 200);
-          } catch { /* 无正文 */ }
-          contextSummaryParts.push(`【${oData.title}】${oData.summary || contentPreview || ""}`);
-        } catch { /* 跳过 */ }
-      }
-    } catch { /* 无大纲目录 */ }
-
-    const contextSummary = contextSummaryParts.join("\n");
-
-    const prompt = `你是一位优秀的短篇小说作家。请根据以下信息创作第 ${currentNum} 章的正文。
+    const prompt = `你是一位优秀的短篇小说作家。请根据以下信息创作正文。
 
 ${settingContent ? `故事设定：\n${settingContent}` : ""}
 
@@ -392,31 +346,29 @@ ${contextSummary ? `\n前文内容摘要：\n${contextSummary}` : ""}
         sendSSE(reply, "chunk", { type: "content", text: chunk });
       }
 
-      // 写入正文文件
-      await fs.writeFile(path.join(contentDir, sectionId), fullText, "utf-8");
+      await fs.mkdir(safeStoryPath(storyId, "正文"), { recursive: true });
+      await fs.writeFile(safeStoryPath(storyId, path.join("正文", sectionId)), fullText, "utf-8");
 
-      // 更新大纲状态
-      outlineData.status = "review";
-      await fs.writeFile(outlinePath, JSON.stringify(outlineData, null, 2), "utf-8");
-
-      // 计算总字数并更新 meta
       let totalWords = 0;
+      const draftDir = safeStoryPath(storyId, "正文");
       try {
-        const contentFiles = await fs.readdir(contentDir);
-        for (const file of contentFiles) {
+        const files = await fs.readdir(draftDir);
+        for (const file of files) {
           if (!file.endsWith(".md")) continue;
-          const content = await fs.readFile(path.join(contentDir, file), "utf-8");
+          const content = await fs.readFile(path.join(draftDir, file), "utf-8");
           totalWords += content.length;
         }
-      } catch { /* 无正文目录 */ }
+      } catch {
+        // Ignore missing draft directory.
+      }
 
       meta.currentWordCount = totalWords;
       meta.updatedAt = new Date().toISOString();
-      await writeMeta(dir, meta);
+      await writeStoryMeta(storyId, meta);
 
       sendSSE(reply, "done", { type: "complete", sectionId, wordCount: fullText.length });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "生成失败";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "生成失败";
       sendSSE(reply, "error", { type: "error", message });
     } finally {
       closeSSE(reply);

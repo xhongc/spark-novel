@@ -24,6 +24,15 @@ export interface Story {
   updatedAt: string
 }
 
+export interface StoryWorkspaceItem {
+  id: string
+  name: string
+  type: 'folder' | 'file'
+  content?: string
+  parentId: string | null
+  updatedAt: string
+}
+
 export interface Section {
   id: string          // 文件名，如 "01-标题.md"
   storyId: string     // 故事标题（目录名）

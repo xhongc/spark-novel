@@ -40,6 +40,18 @@ export interface PiChatHistoryMessage {
   createdAt: string;
 }
 
+export type PiAgentStreamEvent =
+  | {
+    type: "tool_execution_start";
+    toolName: string;
+    args: unknown;
+  }
+  | {
+    type: "tool_execution_end";
+    toolName: string;
+    isError: boolean;
+  };
+
 function getChatSessionFile(userId: string): string {
   const hash = createHash("sha256").update(userId).digest("hex");
   return path.join(CHAT_SESSION_DIR, `chat-${hash}.jsonl`);
@@ -130,13 +142,22 @@ export class PiAgentService {
   /**
    * 流式调用 — 用于生成正文，返回 AsyncGenerator
    */
-  async *stream(prompt: string, systemPrompt?: string): AsyncGenerator<string> {
+  async *stream(
+    prompt: string,
+    systemPrompt?: string,
+    onEvent?: (event: PiAgentStreamEvent) => void,
+  ): AsyncGenerator<string> {
     const { session } = await createDefaultSession(SessionManager.inMemory(WORKSPACE_CWD));
 
-    yield* this.streamSessionPrompt(session, prompt);
+    yield* this.streamSessionPrompt(session, prompt, onEvent);
   }
 
-  async *streamChat(userId: string, content: string, turnContext?: string | null): AsyncGenerator<string> {
+  async *streamChat(
+    userId: string,
+    content: string,
+    turnContext?: string | null,
+    onEvent?: (event: PiAgentStreamEvent) => void,
+  ): AsyncGenerator<string> {
     const sessionFile = getChatSessionFile(userId);
     const { session } = await createDefaultSession(
       SessionManager.open(sessionFile, CHAT_SESSION_DIR, WORKSPACE_CWD),
@@ -152,7 +173,7 @@ export class PiAgentService {
       });
     }
 
-    yield* this.streamSessionPrompt(session, content);
+    yield* this.streamSessionPrompt(session, content, onEvent);
   }
 
   async getChatHistory(userId: string): Promise<PiChatHistoryMessage[]> {
@@ -193,7 +214,11 @@ export class PiAgentService {
     }
   }
 
-  private async *streamSessionPrompt(session: Awaited<ReturnType<typeof createDefaultSession>>["session"], prompt: string): AsyncGenerator<string> {
+  private async *streamSessionPrompt(
+    session: Awaited<ReturnType<typeof createDefaultSession>>["session"],
+    prompt: string,
+    onEvent?: (event: PiAgentStreamEvent) => void,
+  ): AsyncGenerator<string> {
 
     const chunks: string[] = [];
     let waitResolve: (() => void) | null = null;
@@ -207,6 +232,20 @@ export class PiAgentService {
       ) {
         chunks.push(event.assistantMessageEvent.delta);
         waitResolve?.();
+      }
+      if (event.type === "tool_execution_start") {
+        onEvent?.({
+          type: "tool_execution_start",
+          toolName: event.toolName,
+          args: event.args,
+        });
+      }
+      if (event.type === "tool_execution_end") {
+        onEvent?.({
+          type: "tool_execution_end",
+          toolName: event.toolName,
+          isError: event.isError,
+        });
       }
       if (event.type === "agent_end") {
         done = true;

@@ -114,6 +114,16 @@ export const useWritingStore = create<WritingState>((set, get) => ({
         content,
         ...context,
       }, {
+        onProgress: (data) => {
+          if (activeChatRequestId !== requestId) return
+          const nextStatus = typeof data.text === 'string'
+            ? data.text
+            : data.type === 'start'
+              ? '思考中...'
+              : null
+          if (!nextStatus) return
+          set({ chatStatusText: nextStatus })
+        },
         onChunk: (text) => {
           if (activeChatRequestId !== requestId) return
           hasResponse = true

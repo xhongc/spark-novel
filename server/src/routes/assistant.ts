@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { PiAgentStreamEvent } from "../lib/pi-agent.js";
 import { piAgent } from "../lib/pi-agent.js";
 import { authGuard } from "../plugins/auth.js";
 import { closeSSE, initSSE, sendSSE } from "../lib/sse.js";
@@ -52,6 +53,31 @@ function buildPrompt(input: z.infer<typeof assistantChatSchema>): string {
   return `当前上下文：${contextBlocks.join("\n\n")}`;
 }
 
+function getToolStatusText(event: PiAgentStreamEvent): string | null {
+  if (event.type === "tool_execution_end") {
+    return event.isError ? "工具执行失败，正在继续处理..." : "工具执行完成，正在整理结果..."
+  }
+
+  switch (event.toolName) {
+    case "read":
+      return "正在读取文件..."
+    case "ls":
+      return "正在查看目录..."
+    case "find":
+      return "正在查找文件..."
+    case "grep":
+      return "正在搜索内容..."
+    case "edit":
+      return "正在修改文件..."
+    case "write":
+      return "正在写入文件..."
+    case "bash":
+      return "正在执行命令..."
+    default:
+      return `正在执行 ${event.toolName}...`
+  }
+}
+
 export async function assistantRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook("onRequest", authGuard);
 
@@ -84,7 +110,16 @@ export async function assistantRoutes(fastify: FastifyInstance): Promise<void> {
     sendSSE(reply, "progress", { type: "start" });
 
     try {
-      for await (const chunk of piAgent.streamChat(req.user.userId, payload.content, prompt || null)) {
+      for await (const chunk of piAgent.streamChat(
+        req.user.userId,
+        payload.content,
+        prompt || null,
+        (event) => {
+          const text = getToolStatusText(event);
+          if (!text) return;
+          sendSSE(reply, "progress", { type: "status", text });
+        },
+      )) {
         sendSSE(reply, "chunk", { type: "content", text: chunk });
       }
 

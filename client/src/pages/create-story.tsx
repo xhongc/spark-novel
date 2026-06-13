@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useStoryStore } from '@/stores/story-store'
 import { ArrowLeft, Sparkles } from 'lucide-react'
@@ -18,6 +19,7 @@ const randomInspirations = [
 ]
 
 export default function CreateStoryPage() {
+  const [title, setTitle] = useState('')
   const [premise, setPremise] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [placeholder] = useState(() => placeholders[Math.floor(Math.random() * placeholders.length)])
@@ -25,10 +27,10 @@ export default function CreateStoryPage() {
   const navigate = useNavigate()
 
   const handleCreate = async () => {
-    if (!premise.trim() || isCreating) return
+    if (!title.trim() || !premise.trim() || isCreating) return
     setIsCreating(true)
     try {
-      const story = await createStory(premise.trim())
+      const story = await createStory(title.trim(), premise.trim())
       navigate(`/stories/${story.id}/setting`)
     } finally {
       setIsCreating(false)
@@ -59,6 +61,13 @@ export default function CreateStoryPage() {
           </div>
 
           <div className="space-y-4">
+            <Input
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="先给故事起个名字"
+              className="h-12 text-base"
+            />
+
             <Textarea
               value={premise}
               onChange={e => setPremise(e.target.value)}
@@ -79,7 +88,7 @@ export default function CreateStoryPage() {
           <Button
             size="lg"
             className="w-full"
-            disabled={!premise.trim() || isCreating}
+            disabled={!title.trim() || !premise.trim() || isCreating}
             onClick={handleCreate}
           >
             {isCreating ? '正在创建...' : '开始创作'}
