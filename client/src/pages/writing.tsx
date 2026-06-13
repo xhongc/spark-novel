@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useStoryStore } from '@/stores/story-store'
 import { useWritingStore } from '@/stores/writing-store'
+
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Edit3, AlertCircle,
-  Check, Loader2, Sparkles, X, BookOpen, FileText,
+  Check, Loader2, X, BookOpen, FileText,
 } from 'lucide-react'
 import type { Section } from '@/types'
 
@@ -20,15 +21,13 @@ const statusConfig: Record<Section['status'], { icon: React.ReactNode; label: st
 export default function WritingPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { sections, fetchStory, updateSectionStatus, generateSection, isLoading } = useStoryStore()
+  const { sections, fetchStory, updateSectionStatus, isLoading } = useStoryStore()
   const {
     currentSectionIndex, isEditing, isDrawerOpen,
-    isGenerating, generatingSectionId,
-    setSectionIndex, toggleEdit, toggleDrawer, startGeneration, stopGeneration,
+    setSectionIndex, toggleEdit, toggleDrawer,
   } = useWritingStore()
 
   const [editDraft, setEditDraft] = useState<{ sectionId: string; content: string } | null>(null)
-  const [streamingDraft, setStreamingDraft] = useState<{ sectionId: string; content: string } | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
 
   const currentSection = sections[currentSectionIndex]
@@ -43,43 +42,79 @@ export default function WritingPage() {
     if (id) fetchStory(id)
   }, [id, fetchStory])
 
-  useEffect(() => {
-    if (!isGenerating) return
-    contentRef.current?.scrollTo({ top: contentRef.current.scrollHeight, behavior: 'smooth' })
-  }, [streamingDraft?.content, isGenerating])
-
   const goToSection = useCallback((index: number) => {
     if (index >= 0 && index < totalSections) {
       setSectionIndex(index)
     }
   }, [totalSections, setSectionIndex])
 
-  const handleGenerate = async () => {
-    if (!currentSection || !id) return
-    setStreamingDraft({ sectionId: currentSection.id, content: '' })
-    startGeneration(currentSection.id)
-    try {
-      await generateSection(id, currentSection.id, (chunk) => {
-        setStreamingDraft(prev => (
-          prev && prev.sectionId === currentSection.id
-            ? { ...prev, content: prev.content + chunk }
-            : { sectionId: currentSection.id, content: chunk }
-        ))
-      })
-    } catch {
-      // 错误处理
-    } finally {
-      stopGeneration()
-    }
-  }
-
   const prevSection = currentSectionIndex > 0 ? sections[currentSectionIndex - 1] : null
   const nextSection = currentSectionIndex < totalSections - 1 ? sections[currentSectionIndex + 1] : null
 
-  if (isLoading || !currentSection) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (!currentSection) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="shrink-0 h-12 shadow-sm bg-background/90 backdrop-blur-sm z-20">
+          <div className="flex h-full items-center justify-between px-4">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate('/stories')}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <button
+              type="button"
+              onClick={toggleDrawer}
+              className="text-sm font-medium hover:text-foreground/80 transition-colors"
+            >
+              正文
+            </button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleDrawer}>
+              <X className="h-4 w-4 opacity-0" />
+            </Button>
+          </div>
+        </header>
+        <main className="flex-1 flex items-center justify-center px-6">
+          <div className="max-w-sm text-center">
+            <BookOpen className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+            <p className="text-foreground font-medium mb-2">还没有可阅读的正文章节</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              请先在“大纲”里创建章节文件，或通过 AI 助手调用技能，根据设定和大纲生成章节结构与正文内容。
+            </p>
+          </div>
+        </main>
+        {isDrawerOpen && (
+          <>
+            <div className="fixed inset-0 z-40 bg-black/30" onClick={toggleDrawer} />
+            <div className="fixed top-0 left-0 bottom-0 z-50 w-72 bg-background shadow-2xl flex flex-col">
+              <div className="flex items-center justify-between px-4 h-12 shadow-sm">
+                <span className="text-sm font-medium">小节列表</span>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={toggleDrawer}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex-1 flex items-center justify-center px-6 text-center">
+                <div>
+                  <BookOpen className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">还没有章节</p>
+                </div>
+              </div>
+              <div className="shadow-[inset_0_1px_0_rgba(0,0,0,0.05)] p-3 space-y-2">
+                <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => { toggleDrawer(); navigate(`/stories/${id}/setting`) }}>
+                  <FileText className="h-4 w-4 mr-2" /> 返回设定
+                </Button>
+                <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => { toggleDrawer(); navigate(`/stories/${id}/outline`) }}>
+                  <BookOpen className="h-4 w-4 mr-2" /> 返回大纲
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     )
   }
@@ -116,31 +151,14 @@ export default function WritingPage() {
           )}
         </div>
       </header>
-
       {/* 正文区域 */}
       <div className="flex-1 overflow-hidden relative">
-        {isGenerating && generatingSectionId === currentSection.id ? (
-          <div
-            ref={contentRef}
-            className="h-full overflow-y-auto px-6 py-8"
-          >
-            <div className="mx-auto max-w-[600px]">
-              <div className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>AI 正在为你创作...</span>
-              </div>
-              <article className="font-serif text-base leading-[1.8] text-foreground/90 whitespace-pre-wrap">
-                {streamingDraft?.content || <span className="animate-pulse text-muted-foreground">等待响应...</span>}
-              </article>
-            </div>
-          </div>
-        ) : currentSection.status === 'review' && !currentSection.content ? (
+        {currentSection.status === 'review' && !currentSection.content ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-8">
             <BookOpen className="h-12 w-12 text-muted-foreground/30 mb-4" />
-            <p className="text-muted-foreground mb-6">本节大纲已就绪，开始生成正文</p>
-            <Button size="lg" onClick={handleGenerate}>
-              <Sparkles className="h-4 w-4 mr-2" /> 生成正文
-            </Button>
+            <p className="max-w-sm text-muted-foreground leading-relaxed">
+              这一节还没有正文。请通过 AI 助手调用技能，并结合当前故事文件来生成或整理内容。
+            </p>
           </div>
         ) : isEditing ? (
           <div className="h-full flex flex-col p-4">
@@ -279,10 +297,10 @@ export default function WritingPage() {
             </div>
             <div className="shadow-[inset_0_1px_0_rgba(0,0,0,0.05)] p-3 space-y-2">
               <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => { toggleDrawer(); navigate(`/stories/${id}/setting`) }}>
-                <FileText className="h-4 w-4 mr-2" /> 回顾故事设定
+                <FileText className="h-4 w-4 mr-2" /> 返回设定
               </Button>
               <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => { toggleDrawer(); navigate(`/stories/${id}/outline`) }}>
-                <BookOpen className="h-4 w-4 mr-2" /> 返回大纲编辑
+                <BookOpen className="h-4 w-4 mr-2" /> 返回大纲
               </Button>
             </div>
           </div>

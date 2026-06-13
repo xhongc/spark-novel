@@ -37,7 +37,7 @@ export default function StoryListPage() {
     const routes: Record<StoryStage, string> = {
       setting: `/stories/${storyId}/setting`,
       outline: `/stories/${storyId}/outline`,
-      writing: `/stories/${storyId}/outline`,
+      writing: `/stories/${storyId}`,
       completed: `/stories/${storyId}`,
     }
     return routes[stage]

@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useStoryWorkspaceStore } from '@/stores/story-workspace-store'
-import type { Story, StoryWorkspaceItem } from '@/types'
+import type { Story } from '@/types'
+import StoryStageNav from '@/components/story-stage-nav'
 import {
   ArrowLeft,
   Check,
@@ -24,9 +25,8 @@ interface StoryWorkspacePanelProps {
   title: string
   rootLabel: string
   initialFolder: string
-  primaryActionLabel?: string
+  currentStage: 'setting' | 'outline' | 'writing'
   onBack: () => void
-  onPrimaryAction?: () => Promise<void> | void
 }
 
 export default function StoryWorkspacePanel({
@@ -35,9 +35,8 @@ export default function StoryWorkspacePanel({
   title,
   rootLabel,
   initialFolder,
-  primaryActionLabel,
+  currentStage,
   onBack,
-  onPrimaryAction,
 }: StoryWorkspacePanelProps) {
   const {
     items,
@@ -64,7 +63,6 @@ export default function StoryWorkspacePanel({
   const [renameValue, setRenameValue] = useState('')
   const [draftState, setDraftState] = useState<{ fileId: string; content: string } | null>(null)
   const [saved, setSaved] = useState(false)
-  const [isActionRunning, setIsActionRunning] = useState(false)
   const newItemRef = useRef<HTMLInputElement>(null)
   const renameRef = useRef<HTMLInputElement>(null)
 
@@ -134,17 +132,6 @@ export default function StoryWorkspacePanel({
     window.setTimeout(() => setSaved(false), 1800)
   }
 
-  const handlePrimaryAction = async () => {
-    if (!onPrimaryAction) return
-    setIsActionRunning(true)
-    try {
-      await onPrimaryAction()
-      await fetchItems(storyId, currentFolderId)
-    } finally {
-      setIsActionRunning(false)
-    }
-  }
-
   if (currentFile?.type === 'file') {
     return (
       <div className="h-screen bg-background flex flex-col">
@@ -193,12 +180,6 @@ export default function StoryWorkspacePanel({
             </div>
           </div>
           <div className="flex items-center gap-1">
-            {primaryActionLabel && onPrimaryAction && (
-              <Button size="sm" onClick={() => void handlePrimaryAction()} disabled={isActionRunning}>
-                {isActionRunning ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
-                {primaryActionLabel}
-              </Button>
-            )}
             <Button
               variant="ghost"
               size="icon"
@@ -222,6 +203,7 @@ export default function StoryWorkspacePanel({
           </div>
         </div>
       </header>
+      <StoryStageNav storyId={storyId} current={currentStage} />
 
       <main className="mx-auto max-w-2xl px-4 py-4">
         {breadcrumbs.length > 0 && (

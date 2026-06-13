@@ -1,16 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import StoryWorkspacePanel from '@/components/story-workspace-panel'
 import { useStoryStore } from '@/stores/story-store'
-import { useStoryWorkspaceStore } from '@/stores/story-workspace-store'
 import { Loader2 } from 'lucide-react'
 
 export default function OutlinePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { currentStory, fetchStory, isLoading } = useStoryStore()
-  const { initDraft, fetchItems } = useStoryWorkspaceStore()
-  const [isInitializing, setIsInitializing] = useState(false)
 
   useEffect(() => {
     if (id) void fetchStory(id)
@@ -33,19 +30,8 @@ export default function OutlinePage() {
       title="故事大纲"
       rootLabel="大纲"
       initialFolder="大纲"
-      primaryActionLabel={isInitializing ? '初始化中' : '初始化正文'}
+      currentStage="outline"
       onBack={() => navigate(`/stories/${encodeURIComponent(id)}/setting`)}
-      onPrimaryAction={async () => {
-        setIsInitializing(true)
-        try {
-          await initDraft(id)
-          await fetchStory(id)
-          await fetchItems(id, '大纲')
-          navigate(`/stories/${encodeURIComponent(id)}`)
-        } finally {
-          setIsInitializing(false)
-        }
-      }}
     />
   )
 }

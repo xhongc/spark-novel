@@ -16,8 +16,6 @@ interface WritingState {
   chatMessages: ChatMessage[]
   chatStatusText: string | null
   isChatSending: boolean
-  isGenerating: boolean
-  generatingSectionId: string | null
 
   setSectionIndex: (index: number) => void
   toggleEdit: () => void
@@ -30,8 +28,6 @@ interface WritingState {
   clearChatMessages: () => void
   stopChatMessage: () => void
   sendMessage: (content: string, context?: ChatContext) => Promise<void>
-  startGeneration: (sectionId: string) => void
-  stopGeneration: () => void
 }
 
 export const useWritingStore = create<WritingState>((set, get) => ({
@@ -43,8 +39,6 @@ export const useWritingStore = create<WritingState>((set, get) => ({
   chatMessages: [],
   chatStatusText: null,
   isChatSending: false,
-  isGenerating: false,
-  generatingSectionId: null,
 
   setSectionIndex: (index) => set({ currentSectionIndex: index }),
 
@@ -198,7 +192,4 @@ export const useWritingStore = create<WritingState>((set, get) => ({
       }))
     }
   },
-
-  startGeneration: (sectionId) => set({ isGenerating: true, generatingSectionId: sectionId }),
-  stopGeneration: () => set({ isGenerating: false, generatingSectionId: null }),
 }))

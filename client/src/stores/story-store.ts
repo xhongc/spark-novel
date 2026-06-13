@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import type { Story, Section } from '@/types'
 import { api } from '@/lib/api-client'
-import { streamGenerate } from '@/lib/sse-client'
 
 /** 将后端返回的原始故事对象转换为前端类型 */
 function parseStory(raw: Record<string, unknown>): Story {
@@ -33,14 +32,6 @@ interface StoryState {
   createStory: (title: string, premise: string, genre?: string) => Promise<Story>
   renameStory: (storyId: string, newTitle: string) => Promise<string>
   updateSetting: (storyId: string, setting: string) => Promise<void>
-  generateSetting: (storyId: string, onChunk?: (text: string) => void) => Promise<string>
-  generateOutline: (storyId: string, onChunk?: (text: string) => void) => Promise<string>
-  confirmOutline: (storyId: string, text: string) => Promise<void>
-  generateSection: (
-    storyId: string,
-    sectionId: string,
-    onChunk: (text: string) => void,
-  ) => Promise<string>
   updateSectionStatus: (sectionId: string, status: Section['status']) => Promise<void>
   reorderSections: (fromIndex: number, toIndex: number) => void
   deleteSection: (sectionId: string) => void
@@ -120,60 +111,6 @@ export const useStoryStore = create<StoryState>((set, get) => ({
         : state.currentStory
       return { stories, currentStory }
     })
-  },
-
-  generateSetting: async (storyId: string, onChunk?: (text: string) => void) => {
-    let result = ''
-    await streamGenerate('/api/v1/generate/setting', { storyId }, {
-      onChunk: (text) => {
-        result += text
-        onChunk?.(text)
-      },
-      onDone: () => {
-        set(state => {
-          const stories = state.stories.map(s =>
-            s.id === storyId ? { ...s, setting: result, stage: 'outline' as const } : s
-          )
-          const currentStory = state.currentStory?.id === storyId
-            ? { ...state.currentStory, setting: result, stage: 'outline' as const }
-            : state.currentStory
-          return { stories, currentStory }
-        })
-      },
-    })
-    return result
-  },
-
-  generateOutline: async (storyId: string, onChunk?: (text: string) => void) => {
-    let result = ''
-    await streamGenerate('/api/v1/generate/outline', { storyId }, {
-      onChunk: (text) => {
-        result += text
-        onChunk?.(text)
-      },
-    })
-    return result
-  },
-
-  confirmOutline: async (storyId: string, text: string) => {
-    await api.post('/generate/outline/confirm', { storyId, text })
-    await get().fetchStory(storyId)
-  },
-
-  generateSection: async (
-    storyId: string,
-    sectionId: string,
-    onChunk: (text: string) => void,
-  ) => {
-    let fullText = ''
-    await streamGenerate('/api/v1/generate/section', { storyId, sectionId }, {
-      onChunk: (text) => {
-        fullText += text
-        onChunk(text)
-      },
-    })
-    await get().fetchStory(storyId)
-    return fullText
   },
 
   updateSectionStatus: async (sectionId: string, status: Section['status']) => {

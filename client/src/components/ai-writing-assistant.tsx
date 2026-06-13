@@ -424,6 +424,7 @@ export default function AIWritingAssistant() {
   const handleSendStoryWorkspaceChat = async (
     content: string,
     referencedMaterials: ChatReference[],
+    referencedSkills: ChatReference[],
   ) => {
     const storyId = currentStory?.id
     if (!storyId || useWritingStore.getState().isChatSending) return
@@ -465,6 +466,7 @@ export default function AIWritingAssistant() {
           : undefined,
         selectedText: selectedText || undefined,
         referencedFiles: referencedMaterials.length > 0 ? referencedMaterials : undefined,
+        referencedSkills: referencedSkills.length > 0 ? referencedSkills : undefined,
       }, {
         onProgress: (data) => {
           const nextStatus = typeof data.text === 'string'
@@ -558,7 +560,7 @@ export default function AIWritingAssistant() {
 
     try {
       if (isStoryWorkspaceRoute) {
-        await handleSendStoryWorkspaceChat(nextContent, referencedMaterials)
+        await handleSendStoryWorkspaceChat(nextContent, referencedMaterials, referencedSkills)
       } else {
         await sendMessage(nextContent, {
           currentPath: location.pathname,

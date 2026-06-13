@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import { api } from '@/lib/api-client'
-import { streamGenerate } from '@/lib/sse-client'
 import type { StoryWorkspaceItem } from '@/types'
 
 interface StoryWorkspaceState {
@@ -19,8 +18,6 @@ interface StoryWorkspaceState {
   renameItem: (storyId: string, id: string, newName: string) => Promise<void>
   deleteItem: (storyId: string, id: string) => Promise<void>
   searchFiles: (storyId: string, query: string, scope?: string, limit?: number) => Promise<StoryWorkspaceItem[]>
-  generateOutline: (storyId: string, instructions?: string, onChunk?: (text: string) => void) => Promise<void>
-  initDraft: (storyId: string, instructions?: string) => Promise<{ sectionCount: number; createdCount: number }>
 }
 
 export const useStoryWorkspaceStore = create<StoryWorkspaceState>((set, get) => ({
@@ -141,22 +138,5 @@ export const useStoryWorkspaceStore = create<StoryWorkspaceState>((set, get) => 
       params: { q: query, scope, limit },
     })
     return data.data as StoryWorkspaceItem[]
-  },
-
-  generateOutline: async (storyId, instructions, onChunk) => {
-    await streamGenerate(`/api/v1/stories/${encodeURIComponent(storyId)}/actions/generate-outline`, {
-      instructions,
-    }, {
-      onChunk: (text) => {
-        onChunk?.(text)
-      },
-    })
-  },
-
-  initDraft: async (storyId, instructions) => {
-    const { data } = await api.post(`/stories/${encodeURIComponent(storyId)}/actions/init-draft`, {
-      instructions,
-    })
-    return data.data as { sectionCount: number; createdCount: number }
   },
 }))
