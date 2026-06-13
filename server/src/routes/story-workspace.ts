@@ -317,6 +317,38 @@ export async function storyWorkspaceRoutes(fastify: FastifyInstance): Promise<vo
     return { success: true, data: null };
   });
 
+  fastify.get("/stories/:title/agent/chat/session", async (req, reply) => {
+    const storyId = decodeURIComponent((req.params as { title: string }).title);
+    if (!await storyExists(storyId)) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: "NOT_FOUND", message: "故事不存在" },
+      });
+    }
+
+    const messages = await piAgent.getChatHistory(`${req.user.userId}:story:${storyId}`);
+    return reply.send({
+      success: true,
+      data: { messages },
+    });
+  });
+
+  fastify.delete("/stories/:title/agent/chat/session", async (req, reply) => {
+    const storyId = decodeURIComponent((req.params as { title: string }).title);
+    if (!await storyExists(storyId)) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: "NOT_FOUND", message: "故事不存在" },
+      });
+    }
+
+    piAgent.resetChatSession(`${req.user.userId}:story:${storyId}`);
+    return reply.send({
+      success: true,
+      data: null,
+    });
+  });
+
   fastify.post("/stories/:title/agent/chat", async (req, reply) => {
     const storyId = decodeURIComponent((req.params as { title: string }).title);
     if (!await storyExists(storyId)) {
