@@ -29,6 +29,10 @@ if (process.env.OPENAI_API_KEY) {
 
 const modelRegistry = ModelRegistry.create(authStorage, path.join(PROJECT_AGENT_DIR, "models.json"));
 
+export function refreshPiAgentModelRegistry(): void {
+  modelRegistry.refresh();
+}
+
 export interface PiChatHistoryMessage {
   id: string;
   role: "user" | "assistant";

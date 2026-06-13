@@ -49,10 +49,7 @@ function buildPrompt(input: z.infer<typeof assistantChatSchema>): string {
     return "";
   }
 
-  return `当前上下文：
-${contextBlocks.join("\n\n")}
-
-请在回复下一条用户消息时参考以上上下文。`;
+  return `当前上下文：${contextBlocks.join("\n\n")}`;
 }
 
 export async function assistantRoutes(fastify: FastifyInstance): Promise<void> {

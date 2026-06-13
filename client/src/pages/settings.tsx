@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ChevronRight, LogOut, User, BookOpen, FolderOpen, Moon, Info, Bot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/auth-store'
 import { useStoryStore } from '@/stores/story-store'
 import { api } from '@/lib/api-client'
 import BottomNav from '@/components/bottom-nav'
-import { LogOut, User, BookOpen, FolderOpen, Moon, Info } from 'lucide-react'
 
 export default function SettingsPage() {
   const navigate = useNavigate()
@@ -35,7 +35,6 @@ export default function SettingsPage() {
       </header>
 
       <main className="mx-auto max-w-2xl px-4 py-6 space-y-6">
-        {/* 账号信息 */}
         <div className="rounded-xl bg-muted/40 p-5">
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -48,7 +47,6 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* 数据概览 */}
         <div>
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 px-1">数据概览</p>
           <div className="rounded-xl bg-muted/40 divide-y divide-muted/60">
@@ -83,7 +81,26 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* 偏好设置 */}
+        <div>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 px-1">模型</p>
+          <div className="rounded-xl bg-muted/40 divide-y divide-muted/60">
+            <button
+              type="button"
+              onClick={() => navigate('/settings/models')}
+              className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-muted/30"
+            >
+              <div className="flex items-center gap-3">
+                <Bot className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">模型配置</p>
+                  <p className="text-xs text-muted-foreground">管理 provider、模型和默认模型</p>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
+        </div>
+
         <div>
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 px-1">偏好设置</p>
           <div className="rounded-xl bg-muted/40 divide-y divide-muted/60">
@@ -97,7 +114,6 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* 关于 */}
         <div>
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 px-1">关于</p>
           <div className="rounded-xl bg-muted/40 divide-y divide-muted/60">
@@ -111,7 +127,6 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* 退出登录 */}
         <Button variant="outline" className="w-full" onClick={handleLogout}>
           <LogOut className="h-4 w-4 mr-2" /> 退出登录
         </Button>

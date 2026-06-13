@@ -44,6 +44,7 @@ export default function SkillsPage() {
   const currentItems = skills.filter(m => m.parentId === currentFolderId)
   const folders = currentItems.filter(m => m.type === 'folder')
   const files = currentItems.filter(m => m.type === 'file')
+  const isRootLevel = currentFolderId === null
 
   const enterFolder = (id: string, name: string) => {
     setCurrentFolderId(id)
@@ -213,7 +214,11 @@ export default function SkillsPage() {
               >
                 {renamingId === folder.id ? (
                   <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-4 py-3">
-                    <Folder className="h-5 w-5 text-amber-500 shrink-0" />
+                    {isRootLevel ? (
+                      <Zap className="h-5 w-5 text-violet-400 shrink-0" />
+                    ) : (
+                      <Folder className="h-5 w-5 text-amber-500 shrink-0" />
+                    )}
                     <Input
                       ref={renameRef}
                       value={renameValue}
@@ -231,7 +236,11 @@ export default function SkillsPage() {
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') enterFolder(folder.id, folder.name) }}
                     className="flex w-full items-center gap-3 rounded-lg px-4 py-3 transition-colors hover:bg-muted/50"
                   >
-                    <Folder className="h-5 w-5 text-amber-500 shrink-0" />
+                    {isRootLevel ? (
+                      <Zap className="h-5 w-5 text-violet-400 shrink-0" />
+                    ) : (
+                      <Folder className="h-5 w-5 text-amber-500 shrink-0" />
+                    )}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{folder.name}</p>
                       {folder.description && (
@@ -322,7 +331,11 @@ export default function SkillsPage() {
             {newItemType && (
               <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-4 py-3">
                 {newItemType === 'folder' ? (
-                  <Folder className="h-5 w-5 text-amber-500 shrink-0" />
+                  isRootLevel ? (
+                    <Zap className="h-5 w-5 text-violet-400 shrink-0" />
+                  ) : (
+                    <Folder className="h-5 w-5 text-amber-500 shrink-0" />
+                  )
                 ) : (
                   <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
                 )}

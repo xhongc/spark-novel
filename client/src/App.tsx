@@ -10,6 +10,7 @@ import WritingPage from '@/pages/writing'
 import MaterialsPage from '@/pages/materials'
 import SkillsPage from '@/pages/skills'
 import SettingsPage from '@/pages/settings'
+import ModelSettingsPage from '@/pages/model-settings'
 import { useAuthStore } from '@/stores/auth-store'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/materials" element={<ProtectedRoute><MaterialsPage /></ProtectedRoute>} />
         <Route path="/skills" element={<ProtectedRoute><SkillsPage /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+        <Route path="/settings/models" element={<ProtectedRoute><ModelSettingsPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/materials" replace />} />
       </Routes>
     </BrowserRouter>
