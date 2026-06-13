@@ -597,7 +597,7 @@ export default function AIWritingAssistant() {
           currentPath: location.pathname,
           currentStoryTitle: currentStory?.title,
           currentSectionTitle: isWritingRoute ? currentSection?.title : undefined,
-          currentSectionContent: isWritingRoute ? currentSection?.content : undefined,
+          currentSectionContent: isWritingRoute ? (currentSection?.content ?? undefined) : undefined,
           selectedText: selectedText || undefined,
           referencedMaterials: referencedMaterials.length > 0 ? referencedMaterials : undefined,
           referencedSkills: referencedSkills.length > 0 ? referencedSkills : undefined,

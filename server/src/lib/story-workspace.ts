@@ -33,9 +33,17 @@ export interface StorySectionData {
   wordCount: number;
 }
 
+export interface ParsedOutlineSection {
+  index: number;
+  title: string;
+  summary: string;
+  targetWordCount: number;
+}
+
 const chapterHeadingRegex = /^\s*#\s*(.+)\s*$/;
 const summaryHeadingRegex = /^\s*##\s*摘要\s*$/;
 const targetHeadingRegex = /^\s*##\s*目标字数\s*$/;
+const outlineSectionHeadingRegex = /^###\s+#+\s*(\d+)\.?\s+(.+?)(?:（约\s*(\d+)\s*字）)?\s*$/;
 
 export function safeStoryDir(storyId: string): string {
   const resolved = path.resolve(STORY_WORKSPACE_ROOT, storyId);
@@ -215,6 +223,11 @@ export function sanitizeFileName(name: string): string {
     .trim();
 }
 
+export function buildChapterFileName(index: number, title: string): string {
+  const safeTitle = sanitizeFileName(title).replace(/\.md$/i, "").trim() || `第${index}节`;
+  return `${String(index).padStart(2, "0")}-${safeTitle}.md`;
+}
+
 export function serializeChapterFile(input: {
   index: number;
   title: string;
@@ -272,6 +285,75 @@ export function parseChapterMarkdown(content: string, fallbackTitle: string): {
     summary,
     targetWordCount: Number.isFinite(targetWordCount) ? targetWordCount : 1500,
   };
+}
+
+function normalizeOutlineSummary(lines: string[]): string {
+  return lines
+    .join("\n")
+    .replace(/\r\n/g, "\n")
+    .replace(/^\s*-\s*/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function parseOutlineSections(content: string): ParsedOutlineSection[] {
+  const normalized = content.replace(/\r\n/g, "\n");
+  const lines = normalized.split("\n");
+  const sections: ParsedOutlineSection[] = [];
+
+  let current: ParsedOutlineSection | null = null;
+  let captureSummary = false;
+  let summaryLines: string[] = [];
+
+  const flushCurrent = () => {
+    if (!current) return;
+
+    const summary = normalizeOutlineSummary(summaryLines);
+    sections.push({
+      ...current,
+      summary: summary || "待补充",
+    });
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    const headingMatch = rawLine.match(outlineSectionHeadingRegex);
+
+    if (headingMatch) {
+      flushCurrent();
+      current = {
+        index: parseInt(headingMatch[1], 10),
+        title: headingMatch[2].trim(),
+        summary: "",
+        targetWordCount: parseInt(headingMatch[3] || "1500", 10),
+      };
+      captureSummary = false;
+      summaryLines = [];
+      continue;
+    }
+
+    if (!current) continue;
+
+    if (/^\*\*内容\*\*：\s*$/.test(line)) {
+      captureSummary = true;
+      continue;
+    }
+
+    if (/^\*\*(关键技法|伏笔|节末钩子|结尾|情绪目标|场景)\*\*：?\s*$/.test(line) || /^---\s*$/.test(line)) {
+      if (captureSummary) {
+        captureSummary = false;
+      }
+      continue;
+    }
+
+    if (captureSummary) {
+      summaryLines.push(rawLine);
+    }
+  }
+
+  flushCurrent();
+
+  return sections.filter((section) => Number.isFinite(section.index) && section.index > 0 && section.title);
 }
 
 export async function scanStorySections(storyId: string): Promise<StorySectionData[]> {

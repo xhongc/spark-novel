@@ -17,7 +17,9 @@ import {
   MoreVertical,
   Trash2,
   Edit3,
+  WandSparkles,
 } from 'lucide-react'
+import { api } from '@/lib/api-client'
 
 interface StoryWorkspacePanelProps {
   story: Story | null
@@ -63,6 +65,7 @@ export default function StoryWorkspacePanel({
   const [renameValue, setRenameValue] = useState('')
   const [draftState, setDraftState] = useState<{ fileId: string; content: string } | null>(null)
   const [saved, setSaved] = useState(false)
+  const [isGeneratingSections, setIsGeneratingSections] = useState(false)
   const newItemRef = useRef<HTMLInputElement>(null)
   const renameRef = useRef<HTMLInputElement>(null)
 
@@ -132,6 +135,18 @@ export default function StoryWorkspacePanel({
     window.setTimeout(() => setSaved(false), 1800)
   }
 
+  const handleGenerateOutlineSections = async () => {
+    if (isGeneratingSections) return
+
+    setIsGeneratingSections(true)
+    try {
+      await api.post(`/stories/${encodeURIComponent(storyId)}/outline/sections/generate`)
+      await fetchItems(storyId, currentFolderId)
+    } finally {
+      setIsGeneratingSections(false)
+    }
+  }
+
   if (currentFile?.type === 'file') {
     return (
       <div className="h-screen bg-background flex flex-col">
@@ -180,6 +195,17 @@ export default function StoryWorkspacePanel({
             </div>
           </div>
           <div className="flex items-center gap-1">
+            {currentStage === 'outline' && currentFolderId === initialFolder && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleGenerateOutlineSections()}
+                disabled={isGeneratingSections}
+              >
+                {isGeneratingSections ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
+                <span className="ml-1">生成章节</span>
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"

@@ -4,10 +4,13 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authGuard } from "../plugins/auth.js";
 import {
+  buildChapterFileName,
   listStoryWorkspace,
+  parseOutlineSections,
   safeStoryPath,
   sanitizeFileName,
   searchStoryWorkspace,
+  serializeChapterFile,
   storyExists,
 } from "../lib/story-workspace.js";
 import { closeSSE, initSSE, sendSSE } from "../lib/sse.js";
@@ -315,6 +318,60 @@ export async function storyWorkspaceRoutes(fastify: FastifyInstance): Promise<vo
     const { path: relativePath } = deleteSchema.parse(req.body);
     await fs.rm(safeStoryPath(storyId, relativePath), { recursive: true });
     return { success: true, data: null };
+  });
+
+  fastify.post("/stories/:title/outline/sections/generate", async (req, reply) => {
+    const storyId = decodeURIComponent((req.params as { title: string }).title);
+    if (!await storyExists(storyId)) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: "NOT_FOUND", message: "故事不存在" },
+      });
+    }
+
+    const outlinePath = safeStoryPath(storyId, path.join("大纲", "总纲.md"));
+    let outlineContent = "";
+
+    try {
+      outlineContent = await fs.readFile(outlinePath, "utf-8");
+    } catch {
+      return reply.status(404).send({
+        success: false,
+        error: { code: "NOT_FOUND", message: "总纲不存在" },
+      });
+    }
+
+    const sections = parseOutlineSections(outlineContent);
+    if (sections.length === 0) {
+      return reply.status(422).send({
+        success: false,
+        error: { code: "INVALID_OUTLINE", message: "总纲里没有可生成的章节结构" },
+      });
+    }
+
+    const chapterDir = safeStoryPath(storyId, path.join("大纲", "章节"));
+    await fs.mkdir(chapterDir, { recursive: true });
+
+    const createdIds: string[] = [];
+    await Promise.all(sections.map(async (section) => {
+      const fileName = buildChapterFileName(section.index, sanitizeFileName(section.title));
+      const relativePath = path.join("大纲", "章节", fileName);
+      await fs.writeFile(safeStoryPath(storyId, relativePath), serializeChapterFile({
+        index: section.index,
+        title: section.title,
+        summary: section.summary,
+        targetWordCount: section.targetWordCount,
+      }), "utf-8");
+      createdIds.push(relativePath);
+    }));
+
+    return reply.send({
+      success: true,
+      data: {
+        count: sections.length,
+        items: createdIds.sort(),
+      },
+    });
   });
 
   fastify.get("/stories/:title/agent/chat/session", async (req, reply) => {
