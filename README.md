@@ -60,24 +60,13 @@ npm run db:generate
 ```
 
 ## Screenshots
-
-你可以把项目预览图放在这里，建议在仓库中建立 `docs/images/` 目录统一管理。
-
-示例写法：
-
 ```md
 ## Screenshots
 
 ![Materials](docs/images/materials.png)
-![Story Workspace](docs/images/story-workspace.png)
+![Skills](docs/images/skills.png)
+![Story Workspace](docs/images/story-list.png)
 ![Writing](docs/images/writing.png)
+![Settings](docs/images/settings.png)
 ```
 
-如果暂时还没有截图，也可以先保留下面这个结构：
-
-```text
-docs/images/materials.png
-docs/images/story-list.png
-docs/images/writing.png
-docs/images/settings.png
-```
