@@ -1,3 +1,5 @@
+import { toApiUrl } from '@/lib/app-config'
+
 export interface SSECallbacks {
   onChunk?: (text: string) => void;
   onDone?: (data: Record<string, unknown>) => void;
@@ -18,7 +20,7 @@ export async function streamGenerate(
 ): Promise<void> {
   const token = localStorage.getItem("accessToken");
 
-  const res = await fetch(url, {
+  const res = await fetch(toApiUrl(url), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

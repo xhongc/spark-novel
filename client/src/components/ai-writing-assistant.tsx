@@ -449,7 +449,7 @@ export default function AIWritingAssistant() {
     let hasResponse = false
 
     try {
-      await streamGenerate(`/api/v1/stories/${encodeURIComponent(storyId)}/agent/chat`, {
+      await streamGenerate(`/stories/${encodeURIComponent(storyId)}/agent/chat`, {
         content,
         currentPath: location.pathname,
         currentFile: currentStoryFile?.type === 'file'

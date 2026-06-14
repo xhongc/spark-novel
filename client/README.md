@@ -1,73 +1,61 @@
-# React + TypeScript + Vite
+# Client
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Development
 
-Currently, two official plugins are available:
+Create your local API config in development:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cp .env.development .env.local
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Run the frontend:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
+
+Development uses `VITE_API_BASE_URL=/api/v1`, which continues to work with the Vite proxy to `http://localhost:3000`.
+
+## Android Packaging
+
+This frontend is packaged for Android with Capacitor.
+
+1. Create a production env file:
+
+```bash
+cp .env.production.example .env.production
+```
+
+2. Set `VITE_API_BASE_URL` in `.env.production` to your deployed backend, for example:
+
+```bash
+VITE_API_BASE_URL=https://api.example.com/api/v1
+```
+
+3. Install dependencies and generate the Android project:
+
+```bash
+npm install
+npx cap add android
+```
+
+4. Build and sync web assets into the Android shell:
+
+```bash
+npm run cap:sync
+```
+
+5. Open Android Studio:
+
+```bash
+npm run cap:open
+```
+
+6. In Android Studio, build an APK or App Bundle.
+
+## Notes
+
+- The backend in `server/` is not bundled into the APK. It must be deployed separately.
+- Android production should use `https`. If your API is only `http`, Android network security configuration is required.
+- Routing uses `HashRouter` so packaged Android builds can open nested pages without server-side rewrite support.

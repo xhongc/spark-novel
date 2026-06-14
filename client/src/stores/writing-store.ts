@@ -104,7 +104,7 @@ export const useWritingStore = create<WritingState>((set, get) => ({
     let hasResponse = false
 
     try {
-      await streamGenerate('/api/v1/assistant/chat', {
+      await streamGenerate('/assistant/chat', {
         content,
         ...context,
       }, {

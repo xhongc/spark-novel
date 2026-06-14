@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AIWritingAssistant from '@/components/ai-writing-assistant'
 import LoginPage from '@/pages/login'
 import StoryListPage from '@/pages/story-list'
@@ -34,7 +34,7 @@ export default function App() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/stories" element={<ProtectedRoute><StoryListPage /></ProtectedRoute>} />
@@ -48,6 +48,6 @@ export default function App() {
         <Route path="/settings/models" element={<ProtectedRoute><ModelSettingsPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/materials" replace />} />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   )
 }
