@@ -60,9 +60,24 @@ npm run db:generate
 ```
 
 ## Screenshots
-![Materials](docs/images/materials.png)
-![Skills](docs/images/skills.png)
-![Story Workspace](docs/images/story-list.png)
-![Writing](docs/images/writing.png)
-![Settings](docs/images/settings.png)
+
+<div>
+<img src="/docs/images/materials.png" width="250">  &nbsp;
+</div>
+
+<div>
+<img src="/docs/images/skills.png" width="250">  &nbsp;
+</div>
+
+<div>
+<img src="/docs/images/story-list.png" width="250">  &nbsp;
+</div>
+
+<div>
+<img src="/docs/images/writing.png" width="250">  &nbsp;
+</div>
+
+<div>
+<img src="/docs/images/settings.png" width="250">  &nbsp;
+</div>
 
