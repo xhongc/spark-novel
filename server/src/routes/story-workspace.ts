@@ -13,6 +13,7 @@ import {
   serializeChapterFile,
   storyExists,
 } from "../lib/story-workspace.js";
+import { getToolStatusText } from "../lib/agent-status.js";
 import { closeSSE, initSSE, sendSSE } from "../lib/sse.js";
 import { piAgent } from "../lib/pi-agent.js";
 
@@ -115,30 +116,6 @@ function buildStoryWorkspacePrompt(
     "当前上下文：",
     ...contextBlocks,
   ].join("\n\n");
-}
-
-function getToolStatusText(toolName: string, isEnd = false, isError = false): string | null {
-  if (isEnd) {
-    return isError ? "工具执行失败，正在继续处理..." : "工具执行完成，正在整理结果...";
-  }
-
-  switch (toolName) {
-    case "read":
-      return "正在读取故事文件...";
-    case "ls":
-      return "正在查看故事目录...";
-    case "find":
-      return "正在查找相关文件...";
-    case "grep":
-      return "正在搜索故事内容...";
-    case "edit":
-    case "write":
-      return "正在准备修改建议...";
-    case "bash":
-      return "正在执行命令...";
-    default:
-      return `正在执行 ${toolName}...`;
-  }
 }
 
 export async function storyWorkspaceRoutes(fastify: FastifyInstance): Promise<void> {
@@ -427,9 +404,9 @@ export async function storyWorkspaceRoutes(fastify: FastifyInstance): Promise<vo
         payload.content,
         prompt,
         (event) => {
-          const text = event.type === "tool_execution_end"
-            ? getToolStatusText(event.toolName, true, event.isError)
-            : getToolStatusText(event.toolName);
+          const text = getToolStatusText(event, {
+            readLabel: "正在读取故事文件...",
+          });
           if (!text) return;
           sendSSE(reply, "progress", { type: "status", text });
         },

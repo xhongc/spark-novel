@@ -43,7 +43,37 @@ export interface ParsedOutlineSection {
 const chapterHeadingRegex = /^\s*#\s*(.+)\s*$/;
 const summaryHeadingRegex = /^\s*##\s*摘要\s*$/;
 const targetHeadingRegex = /^\s*##\s*目标字数\s*$/;
-const outlineSectionHeadingRegex = /^###\s+#+\s*(\d+)\.?\s+(.+?)(?:（约\s*(\d+)\s*字）)?\s*$/;
+const outlineLevelThreeHeadingRegex = /^###\s+(.+?)\s*$/;
+const outlineBlockHeadingRegex = /^\*\*([^*]+)\*\*[:：]\s*(.*)$/;
+const summaryBlockLabels = new Set([
+  "内容",
+  "情节要点",
+  "剧情梗概",
+  "章节内容",
+  "核心情节",
+]);
+
+const chineseDigitMap: Record<string, number> = {
+  "零": 0,
+  "〇": 0,
+  "一": 1,
+  "二": 2,
+  "两": 2,
+  "三": 3,
+  "四": 4,
+  "五": 5,
+  "六": 6,
+  "七": 7,
+  "八": 8,
+  "九": 9,
+};
+
+const chineseUnitMap: Record<string, number> = {
+  "十": 10,
+  "百": 100,
+  "千": 1000,
+  "万": 10000,
+};
 
 export function safeStoryDir(storyId: string): string {
   const resolved = path.resolve(STORY_WORKSPACE_ROOT, storyId);
@@ -296,6 +326,71 @@ function normalizeOutlineSummary(lines: string[]): string {
     .trim();
 }
 
+function parseSectionIndex(rawValue: string): number | null {
+  const normalized = rawValue.trim();
+  if (!normalized) return null;
+
+  if (/^\d+$/.test(normalized)) {
+    return parseInt(normalized, 10);
+  }
+
+  let total = 0;
+  let currentNumber = 0;
+
+  for (const char of normalized) {
+    if (char in chineseDigitMap) {
+      currentNumber = chineseDigitMap[char];
+      continue;
+    }
+
+    if (char in chineseUnitMap) {
+      const unit = chineseUnitMap[char];
+      total += (currentNumber || 1) * unit;
+      currentNumber = 0;
+      continue;
+    }
+
+    return null;
+  }
+
+  return total + currentNumber || null;
+}
+
+function parseOutlineSectionHeading(rawLine: string): ParsedOutlineSection | null {
+  const headingContent = rawLine.match(outlineLevelThreeHeadingRegex)?.[1]?.trim();
+  if (!headingContent) {
+    return null;
+  }
+
+  const normalizedHeading = headingContent.replace(/^#+\s*/, "").trim();
+  const patterns = [
+    /^第\s*([零〇一二三四五六七八九十百千万两\d]+)\s*章(?:\s*[:：]\s*|\s+)(.+?)(?:（约\s*(\d+)\s*字）)?$/,
+    /^#+\s*(\d+)\.?\s+(.+?)(?:（约\s*(\d+)\s*字）)?$/,
+    /^(\d+)[.、]?\s+(.+?)(?:（约\s*(\d+)\s*字）)?$/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalizedHeading.match(pattern);
+    if (!match) {
+      continue;
+    }
+
+    const index = parseSectionIndex(match[1]);
+    if (!index) {
+      return null;
+    }
+
+    return {
+      index,
+      title: match[2].trim(),
+      summary: "",
+      targetWordCount: parseInt(match[3] || "1500", 10),
+    };
+  }
+
+  return null;
+}
+
 export function parseOutlineSections(content: string): ParsedOutlineSection[] {
   const normalized = content.replace(/\r\n/g, "\n");
   const lines = normalized.split("\n");
@@ -317,16 +412,11 @@ export function parseOutlineSections(content: string): ParsedOutlineSection[] {
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
-    const headingMatch = rawLine.match(outlineSectionHeadingRegex);
+    const heading = parseOutlineSectionHeading(rawLine);
 
-    if (headingMatch) {
+    if (heading) {
       flushCurrent();
-      current = {
-        index: parseInt(headingMatch[1], 10),
-        title: headingMatch[2].trim(),
-        summary: "",
-        targetWordCount: parseInt(headingMatch[3] || "1500", 10),
-      };
+      current = heading;
       captureSummary = false;
       summaryLines = [];
       continue;
@@ -334,12 +424,18 @@ export function parseOutlineSections(content: string): ParsedOutlineSection[] {
 
     if (!current) continue;
 
-    if (/^\*\*内容\*\*：\s*$/.test(line)) {
-      captureSummary = true;
+    const blockHeading = line.match(outlineBlockHeadingRegex);
+    if (blockHeading) {
+      const label = blockHeading[1].trim();
+      const inlineContent = blockHeading[2].trim();
+      captureSummary = summaryBlockLabels.has(label);
+      if (captureSummary && inlineContent) {
+        summaryLines.push(inlineContent);
+      }
       continue;
     }
 
-    if (/^\*\*(关键技法|伏笔|节末钩子|结尾|情绪目标|场景)\*\*：?\s*$/.test(line) || /^---\s*$/.test(line)) {
+    if (/^---\s*$/.test(line)) {
       if (captureSummary) {
         captureSummary = false;
       }

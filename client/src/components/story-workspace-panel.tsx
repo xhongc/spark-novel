@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useStoryWorkspaceStore } from '@/stores/story-workspace-store'
 import type { Story } from '@/types'
-import StoryStageNav from '@/components/story-stage-nav'
 import {
   ArrowLeft,
   Check,
+  ChevronLeft,
   ChevronRight,
   FilePlus,
   FileText,
@@ -40,6 +41,7 @@ export default function StoryWorkspacePanel({
   currentStage,
   onBack,
 }: StoryWorkspacePanelProps) {
+  const navigate = useNavigate()
   const {
     items,
     currentFile,
@@ -94,6 +96,15 @@ export default function StoryWorkspacePanel({
       ? draftState.content
       : currentFile.content || ''
     : ''
+  const encodedStoryId = encodeURIComponent(storyId)
+  const prevStageHref = currentStage === 'outline'
+    ? `/stories/${encodedStoryId}/setting`
+    : null
+  const nextStageHref = currentStage === 'setting'
+    ? `/stories/${encodedStoryId}/outline`
+    : currentStage === 'outline'
+      ? `/stories/${encodedStoryId}`
+      : null
 
   const enterFolder = (id: string, name: string) => {
     setCurrentFolderId(id)
@@ -229,150 +240,169 @@ export default function StoryWorkspacePanel({
           </div>
         </div>
       </header>
-      <StoryStageNav storyId={storyId} current={currentStage} />
-
-      <main className="mx-auto max-w-2xl px-4 py-4">
-        {breadcrumbs.length > 0 && (
-          <div className="flex items-center gap-1 mb-4 text-sm overflow-x-auto">
-            {breadcrumbs.map((crumb, index) => (
-              <span key={crumb.id} className="flex items-center gap-1 shrink-0">
-                {index > 0 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-                <button
-                  type="button"
-                  onClick={() => goToBreadcrumb(index)}
-                  className={index === breadcrumbs.length - 1 ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'}
-                >
-                  {crumb.name}
-                </button>
-              </span>
-            ))}
-          </div>
+      <div className="relative">
+        {prevStageHref && (
+          <button
+            type="button"
+            onClick={() => navigate(prevStageHref)}
+            className="fixed left-2 top-1/2 z-10 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-background/80 shadow-md hover:bg-muted transition-colors"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+        )}
+        {nextStageHref && (
+          <button
+            type="button"
+            onClick={() => navigate(nextStageHref)}
+            className="fixed right-2 top-1/2 z-10 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-background/80 shadow-md hover:bg-muted transition-colors"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
         )}
 
-        {newItemType && (
-          <div className="mb-4 flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
-            {newItemType === 'folder' ? <Folder className="h-4 w-4 text-amber-500" /> : <FileText className="h-4 w-4 text-muted-foreground" />}
-            <Input
-              ref={newItemRef}
-              value={newItemName}
-              onChange={e => setNewItemName(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') handleCreate()
-                if (e.key === 'Escape') setNewItemType(null)
-              }}
-              onBlur={handleCreate}
-              className="h-8 border-0 bg-transparent focus-visible:ring-0 px-0"
-              placeholder={newItemType === 'folder' ? '新建文件夹' : '新建文件'}
-            />
-          </div>
-        )}
+        <main className="mx-auto max-w-2xl px-4 py-4">
+          {breadcrumbs.length > 0 && (
+            <div className="flex items-center gap-1 mb-4 text-sm overflow-x-auto">
+              {breadcrumbs.map((crumb, index) => (
+                <span key={crumb.id} className="flex items-center gap-1 shrink-0">
+                  {index > 0 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                  <button
+                    type="button"
+                    onClick={() => goToBreadcrumb(index)}
+                    className={index === breadcrumbs.length - 1 ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'}
+                  >
+                    {crumb.name}
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : currentItems.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <Folder className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <p className="text-muted-foreground">这里还没有文件</p>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {currentItems.map(item => (
-              <div key={item.id} className="relative">
-                {renamingId === item.id ? (
-                  <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-4 py-3">
-                    {item.type === 'folder' ? (
-                      <Folder className="h-5 w-5 text-amber-500 shrink-0" />
-                    ) : (
-                      <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
-                    )}
-                    <Input
-                      ref={renameRef}
-                      value={renameValue}
-                      onChange={e => setRenameValue(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') handleConfirmRename()
-                        if (e.key === 'Escape') setRenamingId(null)
-                      }}
-                      onBlur={handleConfirmRename}
-                      className="h-7 border-0 bg-transparent focus-visible:ring-0 p-0"
-                    />
-                  </div>
-                ) : (
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => {
-                      if (item.type === 'folder') {
-                        enterFolder(item.id, item.name)
-                      } else {
-                        void openFile(storyId, item.id)
-                      }
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' || e.key === ' ') {
+          {newItemType && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
+              {newItemType === 'folder' ? <Folder className="h-4 w-4 text-amber-500" /> : <FileText className="h-4 w-4 text-muted-foreground" />}
+              <Input
+                ref={newItemRef}
+                value={newItemName}
+                onChange={e => setNewItemName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleCreate()
+                  if (e.key === 'Escape') setNewItemType(null)
+                }}
+                onBlur={handleCreate}
+                className="h-8 border-0 bg-transparent focus-visible:ring-0 px-0"
+                placeholder={newItemType === 'folder' ? '新建文件夹' : '新建文件'}
+              />
+            </div>
+          )}
+
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : currentItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <Folder className="h-12 w-12 text-muted-foreground/40 mb-4" />
+              <p className="text-muted-foreground">这里还没有文件</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {currentItems.map(item => (
+                <div key={item.id} className="relative">
+                  {renamingId === item.id ? (
+                    <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-4 py-3">
+                      {item.type === 'folder' ? (
+                        <Folder className="h-5 w-5 text-amber-500 shrink-0" />
+                      ) : (
+                        <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
+                      )}
+                      <Input
+                        ref={renameRef}
+                        value={renameValue}
+                        onChange={e => setRenameValue(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') handleConfirmRename()
+                          if (e.key === 'Escape') setRenamingId(null)
+                        }}
+                        onBlur={handleConfirmRename}
+                        className="h-7 border-0 bg-transparent focus-visible:ring-0 p-0"
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
                         if (item.type === 'folder') {
                           enterFolder(item.id, item.name)
                         } else {
                           void openFile(storyId, item.id)
                         }
-                      }
-                    }}
-                    className="flex w-full items-center gap-3 rounded-lg px-4 py-3 transition-colors hover:bg-muted/50"
-                  >
-                    {item.type === 'folder' ? (
-                      <Folder className="h-5 w-5 text-amber-500 shrink-0" />
-                    ) : (
-                      <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
-                    )}
-                    <span className="flex-1 text-left text-sm font-medium truncate">{item.name}</span>
-                    <div className="flex items-center gap-2">
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          if (item.type === 'folder') {
+                            enterFolder(item.id, item.name)
+                          } else {
+                            void openFile(storyId, item.id)
+                          }
+                        }
+                      }}
+                      className="flex w-full items-center gap-3 rounded-lg px-4 py-3 transition-colors hover:bg-muted/50"
+                    >
+                      {item.type === 'folder' ? (
+                        <Folder className="h-5 w-5 text-amber-500 shrink-0" />
+                      ) : (
+                        <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
+                      )}
+                      <span className="flex-1 text-left text-sm font-medium truncate">{item.name}</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation()
+                            setContextMenuId(contextMenuId === item.id ? null : item.id)
+                          }}
+                          className="p-1 rounded hover:bg-muted transition-colors"
+                        >
+                          <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                        {item.type === 'folder' ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : null}
+                      </div>
+                    </div>
+                  )}
+
+                  {contextMenuId === item.id && (
+                    <div className="absolute right-12 top-full z-20 bg-background shadow-lg rounded-lg py-1 min-w-[120px]">
                       <button
                         type="button"
-                        onClick={e => {
-                          e.stopPropagation()
-                          setContextMenuId(contextMenuId === item.id ? null : item.id)
+                        onClick={() => {
+                          setRenamingId(item.id)
+                          setRenameValue(item.name)
+                          setContextMenuId(null)
                         }}
-                        className="p-1 rounded hover:bg-muted transition-colors"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors"
                       >
-                        <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                        <Edit3 className="h-3.5 w-3.5" /> 重命名
                       </button>
-                      {item.type === 'folder' ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : null}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void deleteItem(storyId, item.id)
+                          setContextMenuId(null)
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-muted transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> 删除
+                      </button>
                     </div>
-                  </div>
-                )}
-
-                {contextMenuId === item.id && (
-                  <div className="absolute right-12 top-full z-20 bg-background shadow-lg rounded-lg py-1 min-w-[120px]">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRenamingId(item.id)
-                        setRenameValue(item.name)
-                        setContextMenuId(null)
-                      }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors"
-                    >
-                      <Edit3 className="h-3.5 w-3.5" /> 重命名
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void deleteItem(storyId, item.id)
-                        setContextMenuId(null)
-                      }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-muted transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" /> 删除
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </main>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   )
 }

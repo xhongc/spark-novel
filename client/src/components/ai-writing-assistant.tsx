@@ -103,9 +103,7 @@ export default function AIWritingAssistant() {
   const inputRef = useRef<HTMLInputElement>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const isComposingRef = useRef(false)
-  const isHistoryLoadingRef = useRef(false)
   const hasLoadedHistoryRef = useRef(false)
-  const activeSessionKeyRef = useRef<string | null>(null)
 
   const { currentStory, sections } = useStoryStore()
   const { currentMaterial } = useMaterialsStore()
@@ -138,27 +136,8 @@ export default function AIWritingAssistant() {
   const isWritingRoute = /^\/stories\/[^/]+$/.test(location.pathname)
   const isMaterialsRoute = location.pathname === '/materials'
   const isStoryWorkspaceRoute = /^\/stories\/[^/]+\/(setting|outline)$/.test(location.pathname)
-  const storyRouteMatch = location.pathname.match(/^\/stories\/([^/]+)(?:\/(setting|outline))?$/)
-  const storyRouteId = storyRouteMatch?.[1] ? decodeURIComponent(storyRouteMatch[1]) : null
   const currentSection = sections[currentSectionIndex]
   const visibleStatusText = pendingStatusText || chatStatusText
-
-  const chatSession = useMemo(() => {
-    if (storyRouteId && (isWritingRoute || isStoryWorkspaceRoute)) {
-      const encodedStoryId = encodeURIComponent(storyRouteId)
-      return {
-        key: `story:${storyRouteId}`,
-        historyUrl: `/stories/${encodedStoryId}/agent/chat/session`,
-        clearUrl: `/stories/${encodedStoryId}/agent/chat/session`,
-      }
-    }
-
-    return {
-      key: 'assistant',
-      historyUrl: '/assistant/chat/session',
-      clearUrl: '/assistant/chat/session',
-    }
-  }, [isStoryWorkspaceRoute, isWritingRoute, storyRouteId])
 
   const currentPageMaterial = useMemo(() => {
     if (isMaterialsRoute && currentMaterial?.type === 'file') {
@@ -203,30 +182,17 @@ export default function AIWritingAssistant() {
   }, [chatMessages, visibleStatusText])
 
   useEffect(() => {
-    if (activeSessionKeyRef.current !== chatSession.key) {
-      activeSessionKeyRef.current = chatSession.key
-      hasLoadedHistoryRef.current = false
-      isHistoryLoadingRef.current = false
-      setPendingStatusText(null)
-      setChatStatusText(null)
-      setChatMessages([])
-    }
-  }, [chatSession.key, setChatMessages, setChatStatusText])
-
-  useEffect(() => {
     let cancelled = false
 
     async function loadChatHistory() {
-      if (hasLoadedHistoryRef.current || isHistoryLoadingRef.current) return
+      if (hasLoadedHistoryRef.current) return
       if (useWritingStore.getState().chatMessages.length > 0) {
         hasLoadedHistoryRef.current = true
         return
       }
 
-      isHistoryLoadingRef.current = true
-
       try {
-        const { data } = await api.get(chatSession.historyUrl)
+        const { data } = await api.get('/assistant/chat/session')
         if (cancelled) return
         if (useWritingStore.getState().chatMessages.length > 0) {
           hasLoadedHistoryRef.current = true
@@ -237,8 +203,6 @@ export default function AIWritingAssistant() {
         hasLoadedHistoryRef.current = true
       } catch {
         return
-      } finally {
-        isHistoryLoadingRef.current = false
       }
     }
 
@@ -247,7 +211,7 @@ export default function AIWritingAssistant() {
     return () => {
       cancelled = true
     }
-  }, [chatSession.historyUrl, chatSession.key, setChatMessages])
+  }, [setChatMessages])
 
   const lookup = useMemo(() => {
     const nextLookup = getLookupState(chatInput, caretPosition)
@@ -616,7 +580,7 @@ export default function AIWritingAssistant() {
 
   const handleClearChat = async () => {
     try {
-      await api.delete(chatSession.clearUrl)
+      await api.delete('/assistant/chat/session')
     } catch {
       // Local cleanup should still happen even if session reset fails.
     }

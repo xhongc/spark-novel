@@ -48,6 +48,10 @@ export default function WritingPage() {
     }
   }, [totalSections, setSectionIndex])
 
+  const goToOutline = useCallback(() => {
+    navigate(`/stories/${id}/outline`)
+  }, [id, navigate])
+
   const prevSection = currentSectionIndex > 0 ? sections[currentSectionIndex - 1] : null
   const nextSection = currentSectionIndex < totalSections - 1 ? sections[currentSectionIndex + 1] : null
 
@@ -187,10 +191,18 @@ export default function WritingPage() {
 
         {/* 左右切换箭头 */}
         <>
-          {prevSection && (
+          {prevSection ? (
             <button
               type="button"
               onClick={() => goToSection(currentSectionIndex - 1)}
+              className="absolute left-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-background/80 shadow-md hover:bg-muted transition-colors"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={goToOutline}
               className="absolute left-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-background/80 shadow-md hover:bg-muted transition-colors"
             >
               <ChevronLeft className="h-5 w-5" />
