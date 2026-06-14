@@ -60,13 +60,9 @@ npm run db:generate
 ```
 
 ## Screenshots
-```md
-## Screenshots
-
 ![Materials](docs/images/materials.png)
 ![Skills](docs/images/skills.png)
 ![Story Workspace](docs/images/story-list.png)
 ![Writing](docs/images/writing.png)
 ![Settings](docs/images/settings.png)
-```
 
