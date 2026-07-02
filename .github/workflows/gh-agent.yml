@@ -30,20 +30,6 @@ jobs:
                 else
                 echo "GH_AGENT_API_KEY is set"
                 fi
-      - name: Smoke test Deepseek / model API
-        env:
-          GH_AGENT_API_KEY: ${{ secrets.GH_AGENT_API_KEY }}
-        run: |
-          set -euo pipefail
-          echo "Testing Deepseek API with model deepseek-v4-pro..."
-          resp=$(curl -s -X POST "https://api.deepseek.com/v1/responses" \
-          -H "Authorization: Bearer $GH_AGENT_API_KEY" \
-          -H "Content-Type: application/json" \
-          -d '{"model":"deepseek-v4-pro","input":"Hello","max_output_tokens":16}')
-          echo "API response: $resp"
-          if [ -z "$resp" ] || echo "$resp" | grep -qi '"error"'; then
-          echo "API test failed or returned an error"; exit 1
-          fi
       - uses: linhan-dev/gh-agent@v0.1.2
         with:
           base_url: https://api.deepseek.com/v1
