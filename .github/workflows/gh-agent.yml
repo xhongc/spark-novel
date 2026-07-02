@@ -29,7 +29,7 @@ jobs:
           llm_key: ${{ secrets.GH_AGENT_API_KEY }}
           provider_api: openai-responses
           provider_auth_header: "true"
-          model: your-model-name
+          model: deepseek-v4-pro
           model_context_window: "128000"
           model_input: text
           model_max_tokens: "16384"
