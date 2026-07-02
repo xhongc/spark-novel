@@ -23,6 +23,13 @@ jobs:
       pull-requests: write
 
     steps:
+      - name: Check GH_AGENT_API_KEY is set
+        run: |
+                if [ -z "${{ secrets.GH_AGENT_API_KEY }}" ]; then
+                echo "GH_AGENT_API_KEY is not set. Add the secret in repository settings."; exit 1
+                else
+                echo "GH_AGENT_API_KEY is set"
+                fi
       - uses: linhan-dev/gh-agent@v0.1.2
         with:
           base_url: https://api.deepseek.com/v1
