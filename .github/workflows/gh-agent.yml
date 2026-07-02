@@ -48,7 +48,7 @@ jobs:
         with:
           base_url: https://api.deepseek.com/v1
           llm_key: ${{ secrets.GH_AGENT_API_KEY }}
-          provider_api: openai-responses
+          provider_api: openai-completions
           provider_auth_header: "true"
           model: deepseek-v4-pro
           model_context_window: "128000"
